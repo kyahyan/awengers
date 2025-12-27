@@ -32,9 +32,10 @@ export class HeaderUI {
         this.element.style.left = '0';
         this.element.style.width = '100%';
         this.element.style.height = '120px'; // Approximate height based on typical nav bars
-        this.element.style.backgroundImage = `url("/assets/header/nav.png?v=${Date.now()}")`;
-        this.element.style.backgroundSize = '100% 100%'; // Stretch to fill
-        this.element.style.backgroundRepeat = 'no-repeat';
+        // Background image removed - transparent header
+        // this.element.style.backgroundImage = `url("/assets/header/nav.png?v=${Date.now()}")`;
+        // this.element.style.backgroundSize = '100% 100%';
+        // this.element.style.backgroundRepeat = 'no-repeat';
         this.element.style.zIndex = '1000'; // High z-index to stay on top
         this.element.style.pointerEvents = 'none'; // Let clicks pass through empty areas if needed, but buttons will catch them
         this.element.style.display = 'flex';

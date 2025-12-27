@@ -52,8 +52,9 @@ export class UIManager {
                         if (user.cheese === undefined) user.cheese = 999999999;
                         if (user._id && !user.uid) user.uid = user._id; // Map Mongo ID
                         this.currentUser = user;
-                        // Session found: Init Loading UI immediately
-                        this.showLoading();
+                        // Session found: Skip loading screen for faster development
+                        // this.showLoading(); // TEMPORARILY DISABLED
+                        this.initializeGameUI(); // Go straight to game
                         // Refresh data from server in background
                         this.fetchUser();
                         return;
@@ -250,7 +251,7 @@ export class UIManager {
         this.uiContainer.appendChild(this.backBtn);
 
         this.createHomeButtons();
-        this.createHomeProfileCard();
+        // this.createHomeProfileCard(); // Sidebar disabled
     }
 
     private createHomeProfileCard() {

@@ -25,11 +25,11 @@ export class GameManager {
         this.camera.position.set(12, 12, 12); // Moved closer to zoom in (was 20,20,20)
         this.camera.lookAt(0, 0, 0); // Shift focus Left, so objects appear Right
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); // Opaque
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Transparent
         this.renderer.setSize(2160, 1080);
         this.renderer.shadowMap.enabled = true;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.setClearColor(0x000000, 1); // Solid Black
+        this.renderer.setClearColor(0x000000, 0); // Transparent background
 
         const gameLayer = document.getElementById('game-layer');
         if (gameLayer) gameLayer.appendChild(this.renderer.domElement);

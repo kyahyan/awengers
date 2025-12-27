@@ -51,6 +51,113 @@ body {
   flex-shrink: 0;
   transform-origin: center center;
   /* Scale from top left */
+  overflow: hidden;
+}
+
+/* Background Layer - Fixed base */
+#bg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/assets/Background/home-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+/* Parallax Mountains Layer */
+#parallax-layer {
+  position: absolute;
+  top: 0;
+  left: -5%;
+  width: 110%;
+  height: 100%;
+  background-image: url('/assets/Background/mountains-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 1;
+  transform: translate(var(--parallax-x, 0), var(--parallax-y, 0));
+  transition: transform 0.1s ease-out;
+  pointer-events: none;
+}
+
+/* Map Layer - Floating Islands Container */
+#map-layer {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -45%);
+  width: 1400px;
+  height: 900px;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+/* Individual Island Wrapper */
+.map-island {
+  position: absolute;
+  cursor: pointer;
+  transition: transform 0.3s ease, filter 0.3s ease;
+  z-index: 1;
+}
+
+.map-island img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: filter 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+/* Hover Effects */
+.map-island:hover img {
+  filter: saturate(1.4) brightness(1.1);
+}
+
+/* Click/Active Effect */
+.map-island:active img {
+  filter: saturate(1.6) brightness(1.2);
+}
+
+/* Tooltip */
+.island-tooltip {
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(30, 30, 50, 0.95));
+  color: #ffd700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'SF Pro Display', sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.map-island:hover .island-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-5px);
+}
+
+/* Decorative map assets (non-clickable) */
+.map-decoration {
+  height: auto;
+  z-index: 2;
+  opacity: 0.9;
+  filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.3));
 }
 
 #game-layer {
@@ -59,7 +166,8 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 #game-ui {
