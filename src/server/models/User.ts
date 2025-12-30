@@ -27,7 +27,8 @@ const userSchema = new mongoose.Schema({
 
     gold: { type: Number, default: 1000 },
     gems: { type: Number, default: 500 },
-    cheese: { type: Number, default: 100 },
+    heroPotion: { type: Number, default: 100 },
+    soulPotion: { type: Number, default: 50 },
 
     // Use Map for Record<string, number>
     achievementsProgress: { type: Map, of: Number, default: {} },
@@ -45,6 +46,9 @@ const userSchema = new mongoose.Schema({
         arenaBattles: { type: Number, default: 0 },
         heroUsage: { type: Map, of: Number, default: {} }
     },
+
+    // Persistent Hero Data (Level, Rank, Skills)
+    heroes: { type: Map, of: Object, default: {} },
 
     // Inventory
     inventory: { type: Map, of: Number, default: {} }

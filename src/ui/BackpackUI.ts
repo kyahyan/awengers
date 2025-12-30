@@ -1,70 +1,45 @@
 
 import { UserProfile } from "../data/UserProfile";
 import { ITEMS } from "../data/Items";
+import { ModalWrapper } from "./ModalWrapper";
 
 export class BackpackUI {
-    private element: HTMLElement;
+    private modal: ModalWrapper;
     private user: UserProfile;
 
-    constructor(user: UserProfile) {
+    constructor(user: UserProfile, onClose?: () => void) {
         this.user = user;
-        this.element = document.createElement('div');
+        this.modal = new ModalWrapper('INVENTORY', onClose || (() => { }), '70%', '70%');
         this.initialize();
     }
 
     private initialize() {
-        // Full screen container with background
-        this.element.style.position = 'absolute';
-        this.element.style.top = '0';
-        this.element.style.left = '0';
-        this.element.style.width = '100%';
-        this.element.style.height = '100%';
-        // Dark background or use a specific image. Using dark overlay for now to match other screens.
-        this.element.style.backgroundColor = '#1a1a1a';
-        // Add a background image if desired, e.g. wood texture
-        this.element.style.backgroundImage = 'radial-gradient(circle at center, #2e2e2e, #111)';
-        this.element.style.display = 'flex';
-        this.element.style.flexDirection = 'column';
-        this.element.style.alignItems = 'center';
-        this.element.style.color = 'white';
-        this.element.style.fontFamily = "'SF Pro Display', sans-serif";
-        this.element.style.zIndex = '100'; // Below Header but above game
-
-        // Title
-        const title = document.createElement('div');
-        title.innerText = 'INVENTORY';
-        title.style.marginTop = '100px'; // Space for Header
-        title.style.fontSize = '3rem';
-        title.style.fontWeight = 'bold';
-        title.style.letterSpacing = '2px';
-        title.style.color = '#ffd700';
-        title.style.textShadow = '0 0 10px rgba(255, 215, 0, 0.5)';
-        this.element.appendChild(title);
+        const content = this.modal.getContentArea();
+        content.style.display = 'flex';
+        content.style.flexDirection = 'column';
+        content.style.alignItems = 'center';
+        content.style.gap = '20px';
 
         // Grid Container
         const grid = document.createElement('div');
         grid.style.display = 'grid';
-        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))'; // Responsive grid
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))';
         grid.style.gap = '20px';
-        grid.style.width = '80%';
-        grid.style.maxWidth = '1000px';
-        grid.style.marginTop = '40px';
-        grid.style.padding = '20px';
-        grid.style.background = 'rgba(0,0,0,0.3)';
+        grid.style.width = '100%';
+        grid.style.padding = '10px';
+        grid.style.background = 'rgba(0,0,0,0.2)';
         grid.style.borderRadius = '15px';
-        grid.style.border = '1px solid #444';
-        grid.style.overflowY = 'auto'; // Scrollable if many items
-        grid.style.maxHeight = 'calc(100% - 200px)';
+        grid.style.border = '1px solid rgba(255,255,255,0.1)';
+        grid.style.overflowY = 'auto';
+        grid.style.flex = '1';
 
-        if (this.user.inventory) {
+        if (this.user.inventory && Object.keys(this.user.inventory).length > 0) {
             Object.entries(this.user.inventory).forEach(([itemId, count]) => {
                 const itemDef = ITEMS[itemId];
                 if (itemDef) {
                     const itemCard = this.createItemCard(itemDef, count);
                     grid.appendChild(itemCard);
                 } else {
-                    // Item not defined in ITEMS? Show fallback?
-                    // Skipping for now
                     console.warn(`Item ${itemId} not found in definitions.`);
                 }
             });
@@ -74,10 +49,12 @@ export class BackpackUI {
             emptyMsg.style.color = '#777';
             emptyMsg.style.gridColumn = '1 / -1';
             emptyMsg.style.textAlign = 'center';
+            emptyMsg.style.fontSize = '1.2rem';
+            emptyMsg.style.padding = '40px';
             grid.appendChild(emptyMsg);
         }
 
-        this.element.appendChild(grid);
+        content.appendChild(grid);
     }
 
     private createItemCard(itemDef: any, count: number): HTMLElement {
@@ -85,23 +62,23 @@ export class BackpackUI {
         card.className = 'item-card';
         card.style.position = 'relative';
         card.style.background = 'rgba(255, 255, 255, 0.05)';
-        card.style.border = '1px solid #555';
-        card.style.borderRadius = '10px';
-        card.style.padding = '10px';
+        card.style.border = '2px solid #444';
+        card.style.borderRadius = '12px';
+        card.style.padding = '15px';
         card.style.display = 'flex';
         card.style.flexDirection = 'column';
         card.style.alignItems = 'center';
         card.style.cursor = 'pointer';
-        card.style.transition = 'transform 0.1s, border-color 0.1s';
+        card.style.transition = 'transform 0.2s, border-color 0.2s, background 0.2s';
 
         card.onmouseover = () => {
-            card.style.transform = 'scale(1.05)';
+            card.style.transform = 'scale(1.08)';
             card.style.borderColor = '#ffd700';
             card.style.background = 'rgba(255, 255, 255, 0.1)';
         };
         card.onmouseout = () => {
             card.style.transform = 'scale(1)';
-            card.style.borderColor = '#555';
+            card.style.borderColor = '#444';
             card.style.background = 'rgba(255, 255, 255, 0.05)';
         };
 
@@ -111,28 +88,33 @@ export class BackpackUI {
         img.style.height = '64px';
         img.style.objectFit = 'contain';
         img.style.marginBottom = '5px';
+        img.style.filter = 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))';
         card.appendChild(img);
 
         const countBadge = document.createElement('div');
         countBadge.innerText = count.toString();
         countBadge.style.position = 'absolute';
-        countBadge.style.bottom = '5px';
-        countBadge.style.right = '5px';
-        countBadge.style.background = 'rgba(0,0,0,0.8)';
-        countBadge.style.color = '#fff';
-        countBadge.style.fontSize = '0.8rem';
-        countBadge.style.padding = '2px 6px';
-        countBadge.style.borderRadius = '10px';
-        countBadge.style.border = '1px solid #777';
+        countBadge.style.bottom = '8px';
+        countBadge.style.right = '8px';
+        countBadge.style.background = 'rgba(0,0,0,0.85)';
+        countBadge.style.color = '#ffd700';
+        countBadge.style.fontSize = '0.9rem';
+        countBadge.style.fontWeight = 'bold';
+        countBadge.style.padding = '3px 8px';
+        countBadge.style.borderRadius = '12px';
+        countBadge.style.border = '1px solid #ffd700';
         card.appendChild(countBadge);
 
-        // Tooltip (simple title)
         card.title = itemDef.name + "\n" + itemDef.description;
 
         return card;
     }
 
     public getElement(): HTMLElement {
-        return this.element;
+        return this.modal.getElement();
+    }
+
+    public close() {
+        this.modal.close();
     }
 }

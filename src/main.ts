@@ -76,20 +76,4 @@ if (mapLayer) {
     });
 }
 
-// Parallax effect for background mountains only
-const parallaxLayer = document.getElementById('parallax-layer');
-if (parallaxLayer) {
-    document.addEventListener('mousemove', (e) => {
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        const offsetX = (e.clientX - centerX) / centerX;
-        const offsetY = (e.clientY - centerY) / centerY;
 
-        // Subtle parallax movement (reduced for gentle effect)
-        const translateX = offsetX * 6;
-        const translateY = offsetY * 2;
-
-        // Apply transform directly to the parallax layer
-        parallaxLayer.style.transform = `translate(${translateX}px, ${translateY}px)`;
-    });
-}

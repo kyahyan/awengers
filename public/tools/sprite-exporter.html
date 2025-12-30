@@ -261,6 +261,11 @@
                 <label>Saturation:</label>
                 <input type="range" id="saturation" min="0.5" max="2" step="0.1" value="1.3">
 
+                <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+                    <input type="checkbox" id="pingpong-loop" style="width: 18px; height: 18px;">
+                    <label for="pingpong-loop" style="cursor: pointer;">Ping-Pong Loop (smooth breathing effect)</label>
+                </div>
+
                 <label>Camera View:</label>
                 <div class="camera-presets" style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button type="button" class="cam-btn" data-view="front">Front View</button>
@@ -404,6 +409,13 @@
             ambientLight.intensity = brightness;
             directionalLight.intensity = brightness * 1.2;
             fillLight.intensity = brightness * 0.6;
+        });
+
+        // Ping-pong checkbox updates animation loop mode in real-time
+        document.getElementById('pingpong-loop').addEventListener('change', () => {
+            if (selectedAnimationIndex >= 0) {
+                playAnimation(selectedAnimationIndex);
+            }
         });
 
         // Camera View Presets
@@ -683,8 +695,17 @@
             mixer.stopAllAction();
             const action = mixer.clipAction(animations[index]);
             action.reset();
+
+            // Check if ping-pong is enabled for smooth breathing effect
+            const pingPongEnabled = document.getElementById('pingpong-loop').checked;
+            if (pingPongEnabled) {
+                action.setLoop(THREE.LoopPingPong);
+            } else {
+                action.setLoop(THREE.LoopRepeat);
+            }
+
             action.play();
-            log(`Playing: ${animations[index].name}`);
+            log(`Playing: ${animations[index].name}${pingPongEnabled ? ' (ping-pong)' : ''}`);
         }
 
         // Export single animation
@@ -758,19 +779,26 @@
             const fps = parseInt(fpsInput.value) || 24;
             const bgColor = bgColorSelect.value;
             const contrast = document.getElementById('contrast').value;
+            const pingPongEnabled = document.getElementById('pingpong-loop').checked;
 
             const duration = clip.duration;
-            const frameCount = Math.ceil(duration * fps);
+            // Use floor instead of ceil to avoid capturing the last frame
+            // which is identical to the first frame in looping animations
+            let baseFrameCount = Math.max(1, Math.floor(duration * fps));
             const frameDuration = 1 / fps;
+
+            // For ping-pong: forward frames + reverse frames (excluding first and last to avoid duplicates)
+            // e.g., frames 0,1,2,3 becomes 0,1,2,3,2,1 for smooth back-and-forth
+            const totalFrameCount = pingPongEnabled ? (baseFrameCount * 2 - 2) : baseFrameCount;
 
             // Calculate grid dimensions for sprite sheet
             const columns = 5; // Fixed columns for consistent layout
-            const rows = Math.ceil(frameCount / columns);
+            const rows = Math.ceil(totalFrameCount / columns);
 
             // 2x Super-sampling: render at double resolution for anti-aliasing
             const renderSize = frameSize * 2; // e.g., 1024 for 512 frame size
 
-            log(`Exporting "${clip.name}": ${frameCount} frames @ ${fps}fps`);
+            log(`Exporting "${clip.name}": ${totalFrameCount} frames @ ${fps}fps${pingPongEnabled ? ' (ping-pong)' : ''}`);
             log(`Grid: ${columns}x${rows}, Super-sampling: ${renderSize}px -> ${frameSize}px`);
 
             // Setup offscreen renderer with anti-aliasing enabled
@@ -802,7 +830,8 @@
             camera.aspect = 1; // Square for export
             camera.updateProjectionMatrix();
 
-            for (let f = 0; f < frameCount; f++) {
+            // Capture forward frames
+            for (let f = 0; f < baseFrameCount; f++) {
                 const time = f * frameDuration;
                 action.time = time;
                 mixer.update(0); // Force update without advancing
@@ -819,9 +848,32 @@
                 spritePreviewEl.appendChild(img);
 
                 // Progress
-                progressEl.style.width = `${((f + 1) / frameCount) * 100}%`;
+                progressEl.style.width = `${((f + 1) / totalFrameCount) * 100}%`;
 
                 await new Promise(r => setTimeout(r, 10)); // Yield
+            }
+
+            // Add reversed frames for ping-pong (excluding first and last to avoid duplicates)
+            if (pingPongEnabled && baseFrameCount > 2) {
+                for (let f = baseFrameCount - 2; f >= 1; f--) {
+                    const time = f * frameDuration;
+                    action.time = time;
+                    mixer.update(0);
+
+                    offscreenRenderer.render(scene, camera);
+                    const dataUrl = offscreenRenderer.domElement.toDataURL('image/png');
+                    frames.push(dataUrl);
+
+                    const img = document.createElement('img');
+                    img.src = dataUrl;
+                    img.style.filter = `contrast(${contrast}) saturate(${document.getElementById('saturation').value})`;
+                    spritePreviewEl.appendChild(img);
+
+                    const currentFrame = baseFrameCount + (baseFrameCount - 2 - f);
+                    progressEl.style.width = `${((currentFrame + 1) / totalFrameCount) * 100}%`;
+
+                    await new Promise(r => setTimeout(r, 10));
+                }
             }
 
             // Restore camera
@@ -869,7 +921,7 @@
             link.href = sheetCanvas.toDataURL('image/png');
             link.click();
 
-            log(`Exported: ${link.download} (${sheetWidth}x${sheetHeight}px, ${frameCount} frames)`, 'success');
+            log(`Exported: ${link.download} (${sheetWidth}x${sheetHeight}px, ${totalFrameCount} frames${pingPongEnabled ? ', ping-pong' : ''})`, 'success');
             offscreenRenderer.dispose();
         }
 
@@ -880,14 +932,19 @@
             const fps = parseInt(fpsInput.value) || 24;
             const bgColor = bgColorSelect.value;
             const contrast = document.getElementById('contrast').value;
+            const pingPongEnabled = document.getElementById('pingpong-loop').checked;
 
             const duration = clip.duration;
-            const frameCount = Math.ceil(duration * fps);
+            // Use floor to avoid duplicate first/last frame for perfect loops
+            let baseFrameCount = Math.max(1, Math.floor(duration * fps));
             const frameDuration = 1 / fps;
+
+            // For ping-pong: forward frames + reverse frames (excluding first and last)
+            const totalFrameCount = pingPongEnabled ? (baseFrameCount * 2 - 2) : baseFrameCount;
 
             // Calculate grid dimensions
             const columns = 5;
-            const rows = Math.ceil(frameCount / columns);
+            const rows = Math.ceil(totalFrameCount / columns);
 
             // 2x Super-sampling
             const renderSize = frameSize * 2;
@@ -918,7 +975,8 @@
             camera.aspect = 1;
             camera.updateProjectionMatrix();
 
-            for (let f = 0; f < frameCount; f++) {
+            // Capture forward frames
+            for (let f = 0; f < baseFrameCount; f++) {
                 const time = f * frameDuration;
                 action.time = time;
                 mixer.update(0);
@@ -926,6 +984,19 @@
                 const dataUrl = offscreenRenderer.domElement.toDataURL('image/png');
                 frames.push(dataUrl);
                 await new Promise(r => setTimeout(r, 5));
+            }
+
+            // Add reversed frames for ping-pong
+            if (pingPongEnabled && baseFrameCount > 2) {
+                for (let f = baseFrameCount - 2; f >= 1; f--) {
+                    const time = f * frameDuration;
+                    action.time = time;
+                    mixer.update(0);
+                    offscreenRenderer.render(scene, camera);
+                    const dataUrl = offscreenRenderer.domElement.toDataURL('image/png');
+                    frames.push(dataUrl);
+                    await new Promise(r => setTimeout(r, 5));
+                }
             }
 
             camera.aspect = originalAspect;
@@ -977,14 +1048,19 @@
             const fps = parseInt(fpsInput.value) || 24;
             const bgColor = bgColorSelect.value;
             const contrast = document.getElementById('contrast').value;
+            const pingPongEnabled = document.getElementById('pingpong-loop').checked;
 
             const duration = clip.duration;
-            const frameCount = Math.ceil(duration * fps);
+            // Use floor to avoid duplicate first/last frame for perfect loops
+            let baseFrameCount = Math.max(1, Math.floor(duration * fps));
             const frameDuration = 1 / fps;
+
+            // For ping-pong: forward frames + reverse frames (excluding first and last)
+            const totalFrameCount = pingPongEnabled ? (baseFrameCount * 2 - 2) : baseFrameCount;
 
             // Calculate grid dimensions
             const columns = 5;
-            const rows = Math.ceil(frameCount / columns);
+            const rows = Math.ceil(totalFrameCount / columns);
 
             // 2x Super-sampling
             const renderSize = frameSize * 2;
@@ -1013,7 +1089,8 @@
             camera.aspect = 1;
             camera.updateProjectionMatrix();
 
-            for (let f = 0; f < frameCount; f++) {
+            // Capture forward frames
+            for (let f = 0; f < baseFrameCount; f++) {
                 const time = f * frameDuration;
                 action.time = time;
                 mixer.update(0);
@@ -1021,6 +1098,19 @@
                 const dataUrl = offscreenRenderer.domElement.toDataURL('image/png');
                 frames.push(dataUrl);
                 await new Promise(r => setTimeout(r, 5));
+            }
+
+            // Add reversed frames for ping-pong
+            if (pingPongEnabled && baseFrameCount > 2) {
+                for (let f = baseFrameCount - 2; f >= 1; f--) {
+                    const time = f * frameDuration;
+                    action.time = time;
+                    mixer.update(0);
+                    offscreenRenderer.render(scene, camera);
+                    const dataUrl = offscreenRenderer.domElement.toDataURL('image/png');
+                    frames.push(dataUrl);
+                    await new Promise(r => setTimeout(r, 5));
+                }
             }
 
             camera.aspect = originalAspect;

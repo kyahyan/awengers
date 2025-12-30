@@ -1,5 +1,6 @@
 
 import { UserProfile } from '../data/UserProfile';
+import { ModalWrapper } from './ModalWrapper';
 
 export interface ShopItem {
     id: string;
@@ -17,7 +18,7 @@ export const SHOP_ITEMS: ShopItem[] = [
 ];
 
 export class ShopUI {
-    private container: HTMLElement;
+    private modal: ModalWrapper;
     private user: UserProfile;
     private onClose: () => void;
     private onBuy: (item: ShopItem) => void;
@@ -27,77 +28,44 @@ export class ShopUI {
         this.user = user;
         this.onClose = onClose;
         this.onBuy = onBuy;
-        this.container = document.createElement('div');
-        this.container.className = 'shop-modal-overlay';
+        this.modal = new ModalWrapper('ITEM SHOP', onClose, '70%', '70%');
         this.init();
     }
 
     private init() {
-        this.container.innerHTML = `
-            <div class="shop-screen">
-                <div class="shop-title">ITEM SHOP</div>
-                <div class="shop-items-grid"></div>
-            </div>
+        const content = this.modal.getContentArea();
+        content.innerHTML = `
+            <div class="shop-items-grid"></div>
             <style>
-                .shop-modal-overlay {
-                    position: absolute; /* Changed from fixed to absolute to sit in UI container */
-                    top: 0; left: 0; width: 100%; height: 100%;
-                    background-color: rgba(0, 0, 0, 0.85); /* Semi-transparent */
-                    z-index: 500; /* Below Header */
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    pointer-events: auto;
-                }
-                .shop-screen {
-                    width: 100%;
-                    height: 100%;
-                    background-image: url('/assets/shop/shop.png');
-                    background-size: cover;
-                    background-position: center;
-                    background-repeat: no-repeat;
-                    position: relative;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center; /* Or flex-start with padding-top if needed */
-                    padding-top: 100px; /* Space for Header */
-                    box-sizing: border-box;
-                }
-                .shop-title {
-                    font-size: 3rem;
-                    font-weight: 900;
-                    color: #ffd700;
-                    text-shadow: 0 4px 4px rgba(0,0,0,0.9), 0 0 20px rgba(255, 215, 0, 0.5);
-                    margin-bottom: 40px;
-                    font-family: 'SF Pro Display', sans-serif;
-                }
                 .shop-items-grid {
                     display: flex;
                     gap: 30px;
                     justify-content: center;
+                    align-items: center;
                     width: 100%;
+                    height: 100%;
+                    flex-wrap: wrap;
                 }
                 .shop-item-card {
-                    background: rgba(0,0,0,0.6);
+                    background: rgba(0,0,0,0.4);
                     border: 2px solid #555;
                     border-radius: 15px;
-                    padding: 20px;
-                    width: 180px;
+                    padding: 25px;
+                    width: 200px;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    gap: 10px;
-                    transition: transform 0.2s, border-color 0.2s;
+                    gap: 12px;
+                    transition: transform 0.2s, border-color 0.2s, background 0.2s;
                 }
                 .shop-item-card:hover {
-                    transform: translateY(-5px);
+                    transform: translateY(-8px);
                     border-color: #ffd700;
-                    background: rgba(0,0,0,0.8);
+                    background: rgba(0,0,0,0.6);
                 }
                 .item-icon-container {
-                    width: 100px;
-                    height: 100px;
+                    width: 120px;
+                    height: 120px;
                     display: flex;
                     justify-content: center;
                     align-items: center;
@@ -105,53 +73,54 @@ export class ShopUI {
                 .item-icon {
                     max-width: 100%;
                     max-height: 100%;
-                    filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));
+                    filter: drop-shadow(0 0 15px rgba(255,255,255,0.3));
                 }
                 .item-name {
                     color: white;
                     font-weight: bold;
                     text-align: center;
-                    font-size: 1.1rem;
+                    font-size: 1.2rem;
+                    font-family: 'SF Pro Rounded', sans-serif;
                 }
                 .item-desc {
                     color: #aaa;
-                    font-size: 0.9rem;
+                    font-size: 1rem;
                 }
                 .buy-btn {
                     margin-top: 10px;
                     background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
                     border: none;
                     color: white;
-                    padding: 8px 16px;
-                    border-radius: 20px;
+                    padding: 12px 20px;
+                    border-radius: 25px;
                     font-weight: bold;
                     cursor: pointer;
                     width: 100%;
                     display: flex;
                     justify-content: center;
                     align-items: center;
-                    gap: 5px;
-                    font-size: 1rem;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                    gap: 8px;
+                    font-size: 1.1rem;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+                    transition: transform 0.2s, filter 0.2s;
                 }
                 .buy-btn:hover {
-                    filter: brightness(1.1);
+                    filter: brightness(1.15);
                     transform: scale(1.05);
                 }
                 .buy-btn.disabled {
-                    background: #555;
+                    background: #444;
                     cursor: not-allowed;
                     filter: grayscale(1);
                 }
                 .cost-icon {
-                    font-size: 1.2rem;
+                    font-size: 1.3rem;
                     line-height: 1;
                 }
             </style>
         `;
 
-        this.gridContainer = this.container.querySelector('.shop-items-grid') as HTMLElement;
-        // Removed close button listener
+        this.gridContainer = content.querySelector('.shop-items-grid') as HTMLElement;
         this.renderItems();
     }
 
@@ -190,16 +159,14 @@ export class ShopUI {
 
     public update(user: UserProfile) {
         this.user = user;
-        // Only re-render items, not the whole modal
         this.renderItems();
     }
 
     public getElement(): HTMLElement {
-        return this.container;
+        return this.modal.getElement();
     }
 
     public destroy() {
-        this.container.remove();
-        this.onClose();
+        this.modal.close();
     }
 }

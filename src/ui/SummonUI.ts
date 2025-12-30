@@ -1,141 +1,135 @@
 
-import { SummonSystem } from '../systems/SummonSystem';
+// import { SummonSystem } from '../systems/SummonSystem'; // Removed
 import { UserProfile } from '../data/UserProfile';
 import { HeroDef } from '../data/HeroDefinitions';
+import { ModalWrapper } from './ModalWrapper';
 
 export class SummonUI {
-    private element: HTMLElement;
-    private onClose: () => void;
-    private user: UserProfile | null = null; // Need user for inventory
+    private modal: ModalWrapper;
+    private user: UserProfile | null = null;
     private isAnimating: boolean = false;
+    private cardImg!: HTMLImageElement;
+    private resultOverlay!: HTMLElement;
+    private onUpdate?: (user: UserProfile) => void;
 
-    constructor(onClose: () => void) {
-        this.onClose = onClose;
-        // Try to find user from global session if not passed (quick hack since signature change is annoying)
+    constructor(onClose: () => void, onUpdate?: (user: UserProfile) => void) {
+        this.onUpdate = onUpdate;
         const session = localStorage.getItem('awengers_session');
         if (session) {
             this.user = JSON.parse(session);
         }
 
-        this.element = document.createElement('div');
+        this.modal = new ModalWrapper('SUMMON', onClose, '70%', '70%');
         this.initialize();
     }
 
     private initialize() {
-        this.element.style.position = 'absolute';
-        this.element.style.top = '0';
-        this.element.style.left = '0';
-        this.element.style.width = '100%';
-        this.element.style.height = '100%';
-        this.element.style.backgroundColor = 'rgba(0, 0, 0, 0.85)'; // Semi-transparent or None
-        // Game Scene is hidden by UIManager, so this overlay just dims the black value if needed
-
-        this.element.style.zIndex = '500';
-        this.element.style.display = 'flex';
-        this.element.style.justifyContent = 'center';
-        this.element.style.alignItems = 'center';
+        const content = this.modal.getContentArea();
+        content.style.display = 'flex';
+        content.style.flexDirection = 'column';
+        content.style.justifyContent = 'center';
+        content.style.alignItems = 'center';
+        content.style.position = 'relative';
+        content.style.overflow = 'hidden';
 
         // The Summon "Card" Image
-        const cardImg = document.createElement('img');
-        cardImg.src = '/assets/summon/bg-summon.png';
-        cardImg.style.maxHeight = '90%';
-        cardImg.style.maxWidth = '90%';
-        cardImg.style.objectFit = 'contain';
-        cardImg.style.cursor = 'pointer';
-        cardImg.style.transition = 'transform 0.1s, filter 0.2s';
+        this.cardImg = document.createElement('img');
+        this.cardImg.src = '/assets/summon/bg-summon.png';
+        this.cardImg.style.maxHeight = '70%';
+        this.cardImg.style.maxWidth = '80%';
+        this.cardImg.style.objectFit = 'contain';
+        this.cardImg.style.cursor = 'pointer';
+        this.cardImg.style.transition = 'transform 0.2s, filter 0.2s';
+        this.cardImg.style.filter = 'drop-shadow(0 10px 30px rgba(0,0,0,0.5))';
 
-        // Hover effect
-        cardImg.onmouseover = () => {
+        this.cardImg.onmouseover = () => {
             if (!this.isAnimating) {
-                cardImg.style.transform = 'scale(1.05)';
-                cardImg.style.filter = 'drop-shadow(0 0 15px gold)';
+                this.cardImg.style.transform = 'scale(1.05)';
+                this.cardImg.style.filter = 'drop-shadow(0 0 25px gold)';
             }
         };
-        cardImg.onmouseout = () => {
+        this.cardImg.onmouseout = () => {
             if (!this.isAnimating) {
-                cardImg.style.transform = 'scale(1)';
-                cardImg.style.filter = 'none';
+                this.cardImg.style.transform = 'scale(1)';
+                this.cardImg.style.filter = 'drop-shadow(0 10px 30px rgba(0,0,0,0.5))';
             }
         };
 
-        // Click to Summon (Image)
-        cardImg.onclick = () => {
-            console.log("[SummonUI] Card clicked");
-            this.performSummon(cardImg);
+        this.cardImg.onclick = () => {
+            this.performSummon();
         };
 
-        this.element.appendChild(cardImg);
+        content.appendChild(this.cardImg);
 
-        // Explicit Summon Button (Below card)
+        // Summon Button
         const summonBtn = document.createElement('div');
         summonBtn.innerText = "SUMMON (1 Book)";
-        summonBtn.style.position = 'absolute';
-        summonBtn.style.bottom = '10%';
-        summonBtn.style.padding = '15px 40px';
+        summonBtn.style.marginTop = '30px';
+        summonBtn.style.padding = '15px 50px';
         summonBtn.style.background = 'linear-gradient(45deg, #ffd700, #ffa500)';
-        summonBtn.style.border = '2px solid #fff';
-        summonBtn.style.borderRadius = '30px';
+        summonBtn.style.border = '3px solid #fff';
+        summonBtn.style.borderRadius = '35px';
         summonBtn.style.color = '#000';
         summonBtn.style.fontWeight = 'bold';
-        summonBtn.style.fontSize = '1.5rem';
+        summonBtn.style.fontSize = '1.4rem';
         summonBtn.style.cursor = 'pointer';
-        summonBtn.style.boxShadow = '0 5px 15px rgba(0,0,0,0.5)';
-        summonBtn.style.zIndex = '510'; // Above card
-        summonBtn.style.pointerEvents = 'auto';
+        summonBtn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
+        summonBtn.style.transition = 'transform 0.2s, box-shadow 0.2s';
+        summonBtn.style.fontFamily = "'SF Pro Rounded', sans-serif";
 
-        summonBtn.onmouseover = () => summonBtn.style.transform = 'scale(1.1)';
-        summonBtn.onmouseout = () => summonBtn.style.transform = 'scale(1)';
-
-        summonBtn.onclick = () => {
-            console.log("[SummonUI] Button clicked");
-            this.performSummon(cardImg); // Animate the card even if button clicked
+        summonBtn.onmouseover = () => {
+            summonBtn.style.transform = 'scale(1.1)';
+            summonBtn.style.boxShadow = '0 8px 30px rgba(255, 215, 0, 0.6)';
+        };
+        summonBtn.onmouseout = () => {
+            summonBtn.style.transform = 'scale(1)';
+            summonBtn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
         };
 
-        this.element.appendChild(summonBtn);
+        summonBtn.onclick = () => {
+            this.performSummon();
+        };
 
-        // Add Result Overlay Container (Hidden initially)
-        this.createResultOverlay();
+        content.appendChild(summonBtn);
+
+        // Result Overlay (Hidden initially)
+        this.createResultOverlay(content);
     }
 
-    private resultOverlay!: HTMLElement;
-
-    private createResultOverlay() {
+    private createResultOverlay(parent: HTMLElement) {
         this.resultOverlay = document.createElement('div');
         this.resultOverlay.style.position = 'absolute';
         this.resultOverlay.style.top = '0';
         this.resultOverlay.style.left = '0';
         this.resultOverlay.style.width = '100%';
         this.resultOverlay.style.height = '100%';
-        this.resultOverlay.style.backgroundColor = 'rgba(0,0,0,0.9)';
+        this.resultOverlay.style.backgroundColor = 'rgba(0,0,0,0.95)';
         this.resultOverlay.style.display = 'none';
         this.resultOverlay.style.flexDirection = 'column';
         this.resultOverlay.style.justifyContent = 'center';
         this.resultOverlay.style.alignItems = 'center';
-        this.resultOverlay.style.zIndex = '200';
+        this.resultOverlay.style.zIndex = '10';
+        this.resultOverlay.style.borderRadius = '15px';
         this.resultOverlay.onclick = () => {
-            // Click to close result
             this.resultOverlay.style.display = 'none';
             this.isAnimating = false;
         };
-        this.element.appendChild(this.resultOverlay);
+        parent.appendChild(this.resultOverlay);
     }
 
-    private async performSummon(cardElement: HTMLElement) {
-        console.log("[SummonUI] performSummon called. Animating:", this.isAnimating);
+    private async performSummon() {
         if (this.isAnimating) return;
 
-        // Refresh user from localStorage to be safe
         const session = localStorage.getItem('awengers_session');
         if (session) {
             this.user = JSON.parse(session);
         }
 
-        // 1. Check Cost
-        const inventory = this.user?.inventory || {};
+        if (!this.user) return;
+
+        // Optimistic check (Server handles real check)
+        const inventory = this.user.inventory || {};
         const count = inventory['summon_book'] || 0;
-
-        console.log("[SummonUI] User:", this.user?.commanderName, "Books:", count);
-
         if (count < 1) {
             alert("Not enough Summon Books! Check your Backpack.");
             return;
@@ -143,166 +137,142 @@ export class SummonUI {
 
         this.isAnimating = true;
 
-        if (!this.user || !this.user.inventory) return;
+        try {
+            const res = await fetch('http://localhost:3000/api/summon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commanderName: this.user.commanderName })
+            });
 
-        // 2. Deduct Item
-        this.user.inventory['summon_book']--;
-        this.saveUser(); // Persist changes
-
-        // 3. Animate Shake
-        let startTime = Date.now();
-        const shakeInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            if (elapsed > 800) { // Stop shaking
-                clearInterval(shakeInterval);
-                this.revealHero();
-            } else {
-                const offsetX = (Math.random() - 0.5) * 20;
-                const offsetY = (Math.random() - 0.5) * 20;
-                cardElement.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(1.1)`;
-                cardElement.style.filter = `brightness(${1 + elapsed / 500})`; // Get brighter
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.message || "Summon Failed");
+                this.isAnimating = false;
+                return;
             }
-        }, 50);
+
+            const data = await res.json();
+            const { hero, user } = data; // instanceId available but not needed for display currently
+
+            // Sync local user
+            this.user = user;
+            localStorage.setItem('awengers_session', JSON.stringify(this.user));
+            if (this.user && this.onUpdate) {
+                this.onUpdate(this.user);
+            }
+
+            // Animate Shake
+            let startTime = Date.now();
+            const shakeInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                if (elapsed > 800) {
+                    clearInterval(shakeInterval);
+                    this.cardImg.style.transform = 'scale(1)';
+                    this.cardImg.style.filter = 'drop-shadow(0 10px 30px rgba(0,0,0,0.5))';
+                    this.revealHero(hero);
+                } else {
+                    const offsetX = (Math.random() - 0.5) * 20;
+                    const offsetY = (Math.random() - 0.5) * 20;
+                    this.cardImg.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(1.1)`;
+                    this.cardImg.style.filter = `brightness(${1 + elapsed / 500})`;
+                }
+            }, 50);
+
+        } catch (e) {
+            console.error("Summon API Error:", e);
+            alert("Connection Error");
+            this.isAnimating = false;
+        }
     }
 
-    private revealHero() {
-        // Roll Hero
-        const hero = SummonSystem.summon();
+    private revealHero(hero: HeroDef) {
+        // const hero = SummonSystem.summon(); // Logic moved to server
+        const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : '#4facfe';
 
-        // Determine Colors
-        const glowColor = hero.rarity === 'Mythic' ? 'red' : 'blue';
+        this.resultOverlay.innerHTML = '';
 
-        // Show Result
-        this.resultOverlay.innerHTML = ''; // Clear previous
-
-        // Add Animation Styles
         const style = document.createElement('style');
         style.innerText = `
             @keyframes popIn {
                 0% { transform: scale(0) rotate(-180deg); opacity: 0; }
                 100% { transform: scale(1) rotate(0deg); opacity: 1; }
             }
-            .summon-ray {
-                position: absolute; top: 50%; left: 50%;
-                width: 200%; height: 2px; background: ${glowColor};
-                transform: translate(-50%, -50%) rotate(0deg);
-                animation: spinRay 3s linear infinite;
-                z-index: -1;
-                box-shadow: 0 0 20px ${glowColor};
+            @keyframes glow {
+                0%, 100% { box-shadow: 0 0 30px ${glowColor}; }
+                50% { box-shadow: 0 0 60px ${glowColor}, 0 0 80px ${glowColor}; }
             }
-            @keyframes spinRay { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
         `;
         this.resultOverlay.appendChild(style);
 
-        // Container for card
         const cardContainer = document.createElement('div');
         cardContainer.style.position = 'relative';
-        cardContainer.style.width = '300px';
-        cardContainer.style.height = '420px';
-        cardContainer.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        cardContainer.style.width = '280px';
+        cardContainer.style.height = '380px';
+        cardContainer.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), glow 2s ease-in-out infinite';
+        cardContainer.style.background = 'linear-gradient(135deg, #1a1a2e, #16213e)';
+        cardContainer.style.borderRadius = '20px';
+        cardContainer.style.border = `4px solid ${glowColor}`;
+        cardContainer.style.display = 'flex';
+        cardContainer.style.flexDirection = 'column';
+        cardContainer.style.alignItems = 'center';
+        cardContainer.style.justifyContent = 'center';
+        cardContainer.style.padding = '20px';
 
-        // Rays
-        for (let i = 0; i < 4; i++) {
-            const ray = document.createElement('div');
-            ray.className = 'summon-ray';
-            ray.style.animationDelay = `${i * 0.2}s`;
-            cardContainer.appendChild(ray);
-        }
-
-        // Hero Image
-        const img = document.createElement('img');
-        img.src = `https://via.placeholder.com/300x420/000000/ffffff?text=${encodeURIComponent(hero.name)}`;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.border = `4px solid ${glowColor === 'red' ? '#ff0000' : '#4facfe'}`;
-        img.style.borderRadius = '15px';
-        cardContainer.appendChild(img);
-
-        // Name Label
-        const nameLabel = document.createElement('div');
-        nameLabel.innerText = hero.name;
-        nameLabel.style.position = 'absolute';
-        nameLabel.style.bottom = '20px';
-        nameLabel.style.width = '100%';
-        nameLabel.style.textAlign = 'center';
-        nameLabel.style.color = 'white';
-        nameLabel.style.fontSize = '24px';
-        nameLabel.style.fontWeight = 'bold';
-        nameLabel.style.textShadow = '0 2px 4px black';
-        cardContainer.appendChild(nameLabel);
-
-        // Rarity Label
         const rarityLabel = document.createElement('div');
         rarityLabel.innerText = hero.rarity;
-        rarityLabel.style.position = 'absolute';
-        rarityLabel.style.top = '20px';
-        rarityLabel.style.width = '100%';
-        rarityLabel.style.textAlign = 'center';
         rarityLabel.style.color = glowColor;
-        rarityLabel.style.fontSize = '18px';
+        rarityLabel.style.fontSize = '1.2rem';
         rarityLabel.style.fontWeight = 'bold';
-        rarityLabel.style.textShadow = '0 2px 4px black';
+        rarityLabel.style.textTransform = 'uppercase';
+        rarityLabel.style.letterSpacing = '2px';
+        rarityLabel.style.marginBottom = '15px';
         cardContainer.appendChild(rarityLabel);
+
+        const heroIcon = document.createElement('div');
+        heroIcon.innerText = '⭐';
+        heroIcon.style.fontSize = '80px';
+        heroIcon.style.marginBottom = '15px';
+        cardContainer.appendChild(heroIcon);
+
+        const nameLabel = document.createElement('div');
+        nameLabel.innerText = hero.name;
+        nameLabel.style.color = 'white';
+        nameLabel.style.fontSize = '1.6rem';
+        nameLabel.style.fontWeight = 'bold';
+        nameLabel.style.textAlign = 'center';
+        nameLabel.style.textShadow = '0 2px 4px black';
+        nameLabel.style.fontFamily = "'SF Pro Rounded', sans-serif";
+        cardContainer.appendChild(nameLabel);
+
+        const classLabel = document.createElement('div');
+        classLabel.innerText = `${hero.class} Hero`;
+        classLabel.style.color = '#aaa';
+        classLabel.style.fontSize = '1rem';
+        classLabel.style.marginTop = '8px';
+        cardContainer.appendChild(classLabel);
 
         this.resultOverlay.appendChild(cardContainer);
 
         const helpText = document.createElement('div');
-        helpText.innerText = "Click to Continue";
-        helpText.style.color = '#fff';
-        helpText.style.marginTop = '20px';
-        helpText.style.opacity = '0.5';
+        helpText.innerText = "Tap to Continue";
+        helpText.style.color = '#666';
+        helpText.style.marginTop = '25px';
+        helpText.style.fontSize = '1rem';
         this.resultOverlay.appendChild(helpText);
 
         this.resultOverlay.style.display = 'flex';
 
-        // Grant Hero (Logic)
-        this.grantHero(hero);
-    }
-
-    private grantHero(hero: HeroDef) {
-        if (!this.user) return;
-
-        if (!this.user.stats.heroUsage) this.user.stats.heroUsage = {};
-
-        // Logic: If already owned, maybe give shards? For now just log it.
-        // We use heroUsage as ownership for now based on previous investigation.
-        if (!this.user.stats.heroUsage[hero.codeName]) {
-            this.user.stats.heroUsage[hero.codeName] = 1;
-            // Also need to increment collection count for achievements
-            if (this.user.achievementsProgress && this.user.achievementsProgress['collector_1'] !== undefined) {
-                // Recalculate unique count (complex without iteration) - simplification:
-                // const count = Object.keys(this.user.stats.heroUsage).length;
-                // Update collection achievements... 
-            }
-        } else {
-            this.user.stats.heroUsage[hero.codeName]++;
-        }
-
-        this.saveUser();
-    }
-
-    private async saveUser() {
-        if (!this.user) return;
-        localStorage.setItem('awengers_session', JSON.stringify(this.user));
-
-        try {
-            await fetch('http://localhost:3000/api/user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.user)
-            });
-
-            // Dispatch event to update Header UI (resources)
-            // Since we are separated, we can maybe grab global UIManager? 
-            // Or just rely on next navigation update.
-            // Ideally we emit an event.
-        } catch (e) {
-            console.error(e);
+        // Removed grantHero(hero) - handled by server
+        if (this.user) {
+            // Just sanity check local object structure if needed
         }
     }
 
     public getElement(): HTMLElement {
-        return this.element;
+        return this.modal.getElement();
+    }
+
+    public close() {
+        this.modal.close();
     }
 }

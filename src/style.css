@@ -31,6 +31,21 @@
   /* Prevent scrolling */
 }
 
+/* Global smooth transitions */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* GPU acceleration for animations */
+.modal-overlay,
+.modal-container,
+.hero-card,
+.map-island {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
 body {
   margin: 0;
   display: flex;
@@ -88,11 +103,11 @@ body {
 /* Map Layer - Floating Islands Container */
 #map-layer {
   position: absolute;
-  top: 55%;
+  top: 59%;
   left: 50%;
   transform: translate(-50%, -45%);
-  width: 1400px;
-  height: 900px;
+  width: 1600px;
+  height: 1100px;
   z-index: 5;
   pointer-events: auto;
 }
@@ -126,21 +141,21 @@ body {
 /* Tooltip */
 .island-tooltip {
   position: absolute;
-  bottom: -35px;
+  top: -10px;
   left: 50%;
   transform: translateX(-50%);
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(30, 30, 50, 0.95));
   color: #ffd700;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 12px 24px;
+  border-radius: 10px;
   font-family: 'SF Pro Display', sans-serif;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: bold;
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-  border: 1px solid rgba(255, 215, 0, 0.5);
+  border: 2px solid rgba(255, 215, 0, 0.5);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   pointer-events: none;
@@ -149,7 +164,7 @@ body {
 .map-island:hover .island-tooltip {
   opacity: 1;
   visibility: visible;
-  transform: translateX(-50%) translateY(-5px);
+  transform: translateX(-50%) translateY(-10px);
 }
 
 /* Decorative map assets (non-clickable) */
@@ -459,4 +474,32 @@ button:focus-visible {
 .star {
   color: #ffd700;
   font-size: 10px;
+}
+
+/* Modal Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }

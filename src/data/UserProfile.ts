@@ -175,7 +175,8 @@ export interface UserProfile {
     // Economy
     gold: number;
     gems: number;
-    cheese: number;
+    heroPotion: number;
+    soulPotion: number;
 
     // Progression
     achievementsProgress: Record<string, number>; // ID -> Value (e.g., gold collected)
@@ -223,7 +224,8 @@ export const MOCK_USER_PROFILE: UserProfile = {
 
     gold: 999999999,
     gems: 999999999,
-    cheese: 999999999,
+    heroPotion: 999999999,
+    soulPotion: 999999999,
 
     achievementsProgress: {
         "tycoon": 500, // Starting gold counts?

@@ -29,7 +29,9 @@ const seedDB = async () => {
                     rankIcon: 'Infinity Wing',
                     vipPoints: 100000,
                     gems: 999999,
-                    gold: 999999999
+                    gold: 999999999,
+                    heroPotion: 999999,
+                    soulPotion: 999999
                 }
             },
             { upsert: true, new: true }
