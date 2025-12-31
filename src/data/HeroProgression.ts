@@ -163,19 +163,20 @@ export const ORYX_HERO: HeroProgressionConfig = {
     ],
 
     // Rank-up milestones (every 20 levels)
-    // Star requirements: Lv20=1★, Lv40=2★, Lv60=2★, Lv80=3★, Lv100=3★, Lv120=4★, Lv140=4★, Lv160=5★
+    // Rank-up milestones (every 20 levels)
+    // Star requirements: Lv100=2★, Lv140=3★, Lv180=4★, Lv220=5★
     rankUpMilestones: [
         { levelCap: 20, goldCost: 10000, heroPotionCost: 100, reward: 'Unlocks Passive: Static Hooves', newCap: 40 },
-        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: "Unlocks Ultimate: Nature's Wrath", newCap: 60, starRequirement: 2 },
+        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: "Unlocks Ultimate: Nature's Wrath", newCap: 60 },
         { levelCap: 60, goldCost: 150000, heroPotionCost: 1000, reward: 'Stat Boost: +10% Base HP', newCap: 80 },
-        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100, starRequirement: 3 },
-        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Reduced Cooldown', newCap: 120 },
-        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: Charge Reduction', newCap: 140, starRequirement: 4 },
-        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 600% Damage', newCap: 160 },
-        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: Enhanced Damage', newCap: 180, starRequirement: 5 },
-        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Faster Leap', newCap: 200 },
+        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100 },
+        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Reduced Cooldown', newCap: 120, starRequirement: 2 },
+        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: Charge Reduction', newCap: 140 },
+        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 600% Damage', newCap: 160, starRequirement: 3 },
+        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: Enhanced Damage', newCap: 180 },
+        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Faster Leap', newCap: 200, starRequirement: 4 },
         { levelCap: 200, goldCost: 500000000, heroPotionCost: 50000, reward: 'Passive Rank Up: Triple Bounce', newCap: 220 },
-        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: Pierce Effect', newCap: 240 },
+        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: Pierce Effect', newCap: 240, starRequirement: 5 },
         { levelCap: 240, goldCost: 5000000000, heroPotionCost: 100000, reward: 'Final Stat Boost: All Stats +20%', newCap: 250 },
     ]
 };
@@ -262,19 +263,20 @@ export const SABLE_HERO: HeroProgressionConfig = {
     ],
 
     // Rank-up milestones (every 20 levels)
-    // Star requirements: Lv20=1★, Lv40=2★, Lv60=2★, Lv80=3★, Lv100=3★, Lv120=4★, Lv140=4★, Lv160=5★
+    // Rank-up milestones (every 20 levels)
+    // Star requirements: Lv100=2★, Lv140=3★, Lv180=4★, Lv220=5★
     rankUpMilestones: [
         { levelCap: 20, goldCost: 10000, heroPotionCost: 100, reward: "Unlocks Passive: Hunter's Mark", newCap: 40 },
-        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: 'Unlocks Ultimate: Spirit Barrage', newCap: 60, starRequirement: 2 },
+        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: 'Unlocks Ultimate: Spirit Barrage', newCap: 60 },
         { levelCap: 60, goldCost: 150000, heroPotionCost: 1000, reward: 'Stat Boost: +10% Base HP', newCap: 80 },
-        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100, starRequirement: 3 },
-        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Double Knockback', newCap: 120 },
-        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: +5% per Stack', newCap: 140, starRequirement: 4 },
-        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 15 Arrows', newCap: 160 },
-        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: 200% Damage', newCap: 180, starRequirement: 5 },
-        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Reduced Cooldown', newCap: 200 },
+        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100 },
+        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Double Knockback', newCap: 120, starRequirement: 2 },
+        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: +5% per Stack', newCap: 140 },
+        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 15 Arrows', newCap: 160, starRequirement: 3 },
+        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: 200% Damage', newCap: 180 },
+        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Reduced Cooldown', newCap: 200, starRequirement: 4 },
         { levelCap: 200, goldCost: 500000000, heroPotionCost: 50000, reward: 'Passive Rank Up: Max 10 Stacks', newCap: 220 },
-        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: +30% Crit', newCap: 240 },
+        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: +30% Crit', newCap: 240, starRequirement: 5 },
         { levelCap: 240, goldCost: 5000000000, heroPotionCost: 100000, reward: 'Final Stat Boost: All Stats +20%', newCap: 250 },
     ]
 };
@@ -536,14 +538,16 @@ export class HeroProgressionManager {
 
     /**
      * Performs rank up, unlocking new level cap
+     * @param inventory Player's resources
+     * @param heroStars Current star level of the hero (default 1)
      */
-    performRankUp(inventory: PlayerInventory): {
+    performRankUp(inventory: PlayerInventory, heroStars: number = 1): {
         success: boolean;
         newInventory: PlayerInventory;
         newLevelCap: number;
         reward: string;
     } {
-        const check = this.canRankUp(inventory);
+        const check = this.canRankUp(inventory, heroStars);
 
         if (!check.canRankUp) {
             return {
@@ -744,19 +748,20 @@ export const RAZOR_HERO: HeroProgressionConfig = {
     ],
 
     // Rank-up milestones (every 20 levels)
-    // Star requirements: Lv20=1★, Lv40=2★, Lv60=2★, Lv80=3★, Lv100=3★, Lv120=4★, Lv140=4★, Lv160=5★
+    // Rank-up milestones (every 20 levels)
+    // Star requirements: Lv100=2★, Lv140=3★, Lv180=4★, Lv220=5★
     rankUpMilestones: [
         { levelCap: 20, goldCost: 10000, heroPotionCost: 100, reward: "Unlocks Passive: Blood Scent", newCap: 40 },
-        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: 'Unlocks Ultimate: Guillotine Breaker', newCap: 60, starRequirement: 2 },
+        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: 'Unlocks Ultimate: Guillotine Breaker', newCap: 60 },
         { levelCap: 60, goldCost: 150000, heroPotionCost: 1000, reward: 'Stat Boost: +10% Base HP', newCap: 80 },
-        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100, starRequirement: 3 },
-        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Gain Shield', newCap: 120 },
-        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: Threshold < 60%', newCap: 140, starRequirement: 4 },
-        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 750% Damage', newCap: 160 },
-        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: Bleed 5s', newCap: 180, starRequirement: 5 },
-        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Reduced Cooldown', newCap: 200 },
+        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base ATK', newCap: 100 },
+        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Gain Shield', newCap: 120, starRequirement: 2 },
+        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: Threshold < 60%', newCap: 140 },
+        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 750% Damage', newCap: 160, starRequirement: 3 },
+        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: Bleed 5s', newCap: 180 },
+        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: Reduced Cooldown', newCap: 200, starRequirement: 4 },
         { levelCap: 200, goldCost: 500000000, heroPotionCost: 50000, reward: 'Passive Rank Up: Heal on Kill', newCap: 220 },
-        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: Double Dmg if Bleeding', newCap: 240 },
+        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: Double Dmg if Bleeding', newCap: 240, starRequirement: 5 },
         { levelCap: 240, goldCost: 5000000000, heroPotionCost: 100000, reward: 'Skill 2 Rank Up: Knock Up', newCap: 250 },
     ]
 };

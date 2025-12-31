@@ -462,7 +462,7 @@ app.post('/api/hero/rankup', async (req, res) => {
         }
 
         // Attempt Rank Up
-        const result = manager.performRankUp(playerInventory);
+        const result = manager.performRankUp(playerInventory, heroStars);
 
         if (!result.success) {
             const failure = result as any;
@@ -565,9 +565,27 @@ app.post('/api/hero/merge', async (req, res) => {
             });
         }
 
+        // Helper to extract heroCodeName from instanceId (format: "codename_timestamp_random")
+        const extractCodeNameFromId = (id: string): string => {
+            if (!id) return '';
+            const parts = id.split('_');
+            let codeNameParts: string[] = [];
+            for (const part of parts) {
+                // If it's a long number (timestamp), stop
+                if (/^\d{10,}$/.test(part)) break;
+                codeNameParts.push(part);
+            }
+            // Title case the code name parts
+            return codeNameParts.map(p =>
+                p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+            ).join(' ');
+        };
+
         // Validate sacrifices
-        const mainHeroCodeName = mainHero.heroCodeName;
+        const mainHeroCodeName = mainHero.heroCodeName || extractCodeNameFromId(mainHeroId);
         const mainHeroAttribute = mainHero.attribute || 'STR'; // Default to STR if missing
+
+        console.log(`[Merge] Main hero: ${mainHeroId}, codeName: ${mainHeroCodeName}, attribute: ${mainHeroAttribute}`);
 
         for (const sacId of sacrificeIds) {
             if (sacId === mainHeroId) {
@@ -579,6 +597,9 @@ app.post('/api/hero/merge', async (req, res) => {
 
             const sacHero = userAny.heroes.get(sacId);
             const sacStars = sacHero.stars || 1;
+            const sacHeroCodeName = sacHero.heroCodeName || extractCodeNameFromId(sacId);
+
+            console.log(`[Merge] Sacrifice: ${sacId}, codeName: ${sacHeroCodeName}, stars: ${sacStars}`);
 
             // Check star level
             if (sacStars !== recipe.sacrificeStarLevel) {
@@ -587,11 +608,13 @@ app.post('/api/hero/merge', async (req, res) => {
                 });
             }
 
-            // Check same hero requirement
-            if (recipe.requireSameHero && sacHero.heroCodeName !== mainHeroCodeName) {
-                return res.status(400).json({
-                    message: `Sacrifice must be the same hero (${mainHeroCodeName})`
-                });
+            // Check same hero requirement (case-insensitive)
+            if (recipe.requireSameHero) {
+                if (sacHeroCodeName.toLowerCase() !== mainHeroCodeName.toLowerCase()) {
+                    return res.status(400).json({
+                        message: `Sacrifice must be the same hero (${mainHeroCodeName})`
+                    });
+                }
             }
 
             // Check same attribute requirement

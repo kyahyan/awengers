@@ -32,7 +32,9 @@
 }
 
 /* Global smooth transitions */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -374,7 +376,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  overflow: hidden;
+  /* overflow: hidden; Removed to allow attribute icon to hang out */
   transition: transform 0.2s;
 }
 
@@ -478,28 +480,35 @@ button:focus-visible {
 
 /* Modal Animations */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes modalIn {
-    from {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0.9);
-    }
-    to {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 @keyframes slideInLeft {
-    from {
-        opacity: 0;
-        transform: translateX(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }

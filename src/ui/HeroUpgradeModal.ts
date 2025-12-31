@@ -1,4 +1,4 @@
-import { HeroAssetConfig } from '../data/HeroAssetsMap';
+import { HeroAssetConfig, HERO_ASSETS } from '../data/HeroAssetsMap';
 import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition, HeroInstance } from '../data/HeroProgression';
 
 export class HeroUpgradeModal {
@@ -25,6 +25,12 @@ export class HeroUpgradeModal {
         'aspd': '/assets/attr/atk-speed.png',
         'moveSpeed': '/assets/attr/boots.png'
     };
+
+
+    // State
+    private activeTab: 'equipment' | 'evolution' = 'equipment';
+    private selectedSacrifices: Map<number, string> = new Map(); // slot index -> instanceId
+    private heroSelectionModal: HTMLElement | null = null;
 
     constructor(hero: HeroAssetConfig, instanceId: string, user: any, onClose: () => void, onUpdate: (updatedUser: any) => void) {
         this.heroAssetName = hero.name;
@@ -112,7 +118,7 @@ export class HeroUpgradeModal {
             left: 50%;
             transform: translate(-50%, -50%);
             width: 90%;
-            max-width: 1100px;
+            max-width: 1250px;
             height: 85%;
             background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 30%, #16213e 70%, #0d0d1a 100%);
             display: flex;
@@ -155,6 +161,22 @@ export class HeroUpgradeModal {
         const nextLevelCost = this.heroManager.getNextLevelCost(heroLevel);
         const heroPower = this.calculateHeroPower(stats, skills, heroLevel);
 
+        // Check for star gating logic early to decide layout
+        const heroInstanceLocal = this.heroManager.getHeroInstance();
+        const currentRankIndex = heroInstanceLocal.currentRankIndex;
+        const currentMilestone = config.rankUpMilestones[currentRankIndex];
+
+        let heroStars = 1;
+        if (this.user.heroes) {
+            const hData = this.user.heroes instanceof Map
+                ? this.user.heroes.get(this.instanceId)
+                : this.user.heroes[this.instanceId];
+            heroStars = hData?.stars || 1;
+        }
+
+        const isAtCap = this.heroManager.isAtLevelCap();
+        const needsEvolution = isAtCap && currentMilestone?.starRequirement && heroStars < currentMilestone.starRequirement;
+
         // Close Button
         const closeBtn = document.createElement('div');
         closeBtn.innerText = '✕';
@@ -189,6 +211,48 @@ export class HeroUpgradeModal {
         // Level Badge
         leftPanel.appendChild(this.createLevelBadge(heroLevel, config.maxLevel));
 
+        // Determine Class and Species Icons
+        let heroClass = 'Unknown';
+        let heroSpecies = 'Unknown';
+        let classIconChar = '?';
+        let speciesIconChar = '?';
+        let classColor = '#4b2c20'; // Brown default
+        let speciesColor = '#2d4a22'; // Green default
+
+        const lowerName = config.name.toLowerCase();
+
+        if (lowerName.includes('oryx') || lowerName.includes('mage')) {
+            heroClass = 'Mage';
+            heroSpecies = 'Antelope';
+            classIconChar = '🔮';
+            speciesIconChar = '🦌';
+            classColor = '#9333ea'; // Purple
+            speciesColor = '#ca8a04'; // Dark Yellow/Brown
+        } else if (lowerName.includes('sable') || lowerName.includes('ranger')) {
+            heroClass = 'Ranger';
+            heroSpecies = 'Antelope';
+            classIconChar = '🏹';
+            speciesIconChar = '🦌';
+            classColor = '#16a34a'; // Green
+            speciesColor = '#ca8a04'; // Dark Yellow/Brown
+        } else if (lowerName.includes('razor') || lowerName.includes('assassin') || lowerName.includes('boar')) {
+            heroClass = 'Assassin';
+            heroSpecies = 'Boar';
+            classIconChar = '🗡️';
+            speciesIconChar = '🐗';
+            classColor = '#dc2626'; // Red
+            speciesColor = '#7f1d1d'; // Dark Red/Brown
+        }
+
+        // Helper for Attribute Icon Badge
+        const attrColorMap = { 'STR': '#dc2626', 'AGI': '#16a34a', 'INT': '#2563eb' };
+        const attrColor = (attrColorMap as any)[config.mainStat] || '#1f2937';
+
+        // Icon Paths
+        let attrIconPath = '/assets/attr/attribute/str.svg';
+        if (config.mainStat === 'AGI') attrIconPath = '/assets/attr/attribute/agi.svg';
+        if (config.mainStat === 'INT') attrIconPath = '/assets/attr/attribute/int.svg';
+
         // Name & Role
         const heroName = document.createElement('div');
         heroName.style.cssText = `font-size: 2.2rem; font-weight: bold; color: #fff; text-transform: uppercase; letter-spacing: 3px;`;
@@ -196,8 +260,22 @@ export class HeroUpgradeModal {
         leftPanel.appendChild(heroName);
 
         const roleInfo = document.createElement('div');
-        roleInfo.style.cssText = `color: #06b6d4; font-size: 0.8rem; margin-bottom: 5px;`;
-        roleInfo.innerText = `${config.displayName} • ${config.role}`;
+        roleInfo.style.cssText = `color: #06b6d4; font-size: 0.8rem; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;`;
+        roleInfo.innerHTML = `
+            <div style="width: 20px; height: 20px; background: ${attrColor}; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" title="${config.mainStat} Attribute">
+                <img src="${attrIconPath}" style="width: 14px; height: 14px; filter: brightness(0) invert(1);">
+            </div>
+            
+            <span>${config.role}</span>
+
+            <div style="width: 20px; height: 20px; background: ${classColor}; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" title="Class: ${heroClass}">
+                <span style="font-size: 12px;">${classIconChar}</span>
+            </div>
+
+            <div style="width: 20px; height: 20px; background: ${speciesColor}; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" title="Species: ${heroSpecies}">
+                <span style="font-size: 12px;">${speciesIconChar}</span>
+            </div>
+        `;
         leftPanel.appendChild(roleInfo);
 
         // Stats
@@ -226,7 +304,6 @@ export class HeroUpgradeModal {
         });
 
         // Upgrade Section
-        const isAtCap = this.heroManager.isAtLevelCap();
         const isMaxLevel = heroLevel >= config.maxLevel;
 
         if (!isMaxLevel) {
@@ -244,22 +321,11 @@ export class HeroUpgradeModal {
             if (isAtCap) {
                 // RANK UP MODE
                 const rankCost = this.heroManager.getRankUpCost();
-                const currentMilestone = config.rankUpMilestones[this.heroManager.getHeroInstance().currentRankIndex];
-
-                // Get hero's star level from user data
-                let heroStars = 1;
-                if (this.user.heroes) {
-                    const heroInstance = this.user.heroes instanceof Map
-                        ? this.user.heroes.get(this.instanceId)
-                        : this.user.heroes[this.instanceId];
-                    heroStars = heroInstance?.stars || 1;
-                }
-
-                // Check for star gating
-                const needsEvolution = currentMilestone?.starRequirement && heroStars < currentMilestone.starRequirement;
+                // currentMilestone and heroStars are already calculated at top of method
 
                 if (needsEvolution && currentMilestone) {
                     // STAR-GATED - Show evolution required message
+
                     costGold = 0;
                     costSecondResource = 0;
                     secondResourceIcon = '⭐';
@@ -349,21 +415,54 @@ export class HeroUpgradeModal {
 
         this.renderSprite(centerSection);
 
-        // Power Box
+        // Star Badge - Above hero
+        let starsHtml = '';
+        for (let i = 0; i < heroStars; i++) {
+            starsHtml += `<span style="color: #fbbf24; font-size: 1.8rem; margin: 0 -2px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">★</span>`;
+        }
+        const starBadge = document.createElement('div');
+        starBadge.style.cssText = `
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        `;
+        starBadge.innerHTML = starsHtml;
+        centerSection.appendChild(starBadge);
+
+        // Power Box - Centered above skills
         const powerBox = document.createElement('div');
-        powerBox.style.cssText = `position: absolute; top: 20px; left: 10%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; padding: 10px 20px; z-index: 10;`;
+        powerBox.style.cssText = `
+            position: absolute; 
+            bottom: 160px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            padding: 8px 20px; 
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+        `;
         powerBox.innerHTML = `
-            <img src="/assets/attr/fist.png" style="width: 56px; height: 56px; object-fit: contain;" />
+            <img src="/assets/icons/fist.png" style="width: 24px; height: 24px; object-fit: contain;">
             <div>
-                <div style="color: #6b7280; font-size: 0.6rem;">HERO POWER</div>
-                <div style="color: #fbbf24; font-size: 1.4rem; font-weight: bold;">${heroPower.toLocaleString()}</div>
+                <div style="color: #9ca3af; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;">Hero Power</div>
+                <div style="color: #fbbf24; font-size: 1.2rem; font-weight: 800; line-height: 1;">${heroPower.toLocaleString()}</div>
             </div>
         `;
         centerSection.appendChild(powerBox);
 
         // Skills
         const skillsBar = document.createElement('div');
-        skillsBar.style.cssText = `position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; padding: 18px 30px; background: rgba(0, 0, 0, 0.7); border-radius: 18px; backdrop-filter: blur(10px); z-index: 10;`;
+        skillsBar.style.cssText = `position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; padding: 18px 30px; background: rgba(0, 0, 0, 0.7); border-radius: 18px; backdrop-filter: blur(10px); z-index: 10; border: 1px solid rgba(255,255,255,0.1);`;
 
         skills.forEach(skill => {
             const currentRankIndex = this.getCurrentRankIndex(skill, heroLevel);
@@ -416,6 +515,72 @@ export class HeroUpgradeModal {
         centerSection.appendChild(skillsBar);
 
         this.container.appendChild(centerSection);
+
+
+
+        // === RIGHT PANEL - Equipment & Evolution ===
+        const rightPanel = document.createElement('div');
+        rightPanel.style.cssText = `
+            width: 380px;
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+            border-left: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            z-index: 2;
+            overflow-y: auto;
+            animation: slideInRight 0.4s ease;
+        `;
+
+        // TABS
+        const tabsContainer = document.createElement('div');
+        tabsContainer.style.cssText = `display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 15px;`;
+
+        const createTab = (id: 'equipment' | 'evolution', label: string) => {
+            const isActive = this.activeTab === id;
+            const tab = document.createElement('div');
+            tab.innerText = label;
+            tab.style.cssText = `
+                flex: 1; text-align: center; padding: 10px; cursor: pointer;
+                font-size: 0.9rem; font-weight: bold; border-radius: 8px;
+                background: ${isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
+                color: ${isActive ? '#fbbf24' : '#6b7280'};
+                transition: all 0.2s;
+                border: ${isActive ? '1px solid rgba(251, 191, 36, 0.3)' : '1px solid transparent'};
+            `;
+            tab.onmouseenter = () => { if (!isActive) tab.style.color = '#fff'; };
+            tab.onmouseleave = () => { if (!isActive) tab.style.color = '#6b7280'; };
+            tab.onclick = () => {
+                this.activeTab = id;
+                this.renderContent(); // Re-render to switch content
+            };
+            return tab;
+        };
+
+        tabsContainer.appendChild(createTab('equipment', 'EQUIPMENT'));
+        tabsContainer.appendChild(createTab('evolution', 'EVOLUTION'));
+        rightPanel.appendChild(tabsContainer);
+
+        // CONTENT
+        if (this.activeTab === 'equipment') {
+            this.renderEquipmentPanel(rightPanel);
+        } else {
+            console.log("Evolution Tab - Needs Evolution?", needsEvolution);
+            if (needsEvolution && currentMilestone) {
+                this.renderMergePanel(rightPanel, currentMilestone, heroStars);
+            } else if (isAtCap && !needsEvolution) {
+                // Max Rank or no further evolution needed at this cap
+                rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">Max Evolution Reached for now.</div>`;
+            } else {
+                // Not at cap
+                rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">
+                    <div>Level up to ${currentLevelCap} to unlock evolution.</div>
+                 </div>`;
+            }
+        }
+
+        this.container.appendChild(rightPanel);
+
     }
 
     private createLevelBadge(level: number, max: number): HTMLElement {
@@ -503,7 +668,14 @@ export class HeroUpgradeModal {
                 this.renderContent();
             } else {
                 console.warn('[HeroUpgradeModal] Level Up Failed:', data);
-                alert(data.reason ? `${data.message}: ${data.reason}` : (data.message || 'Level Up Failed'));
+                // Suppress alert for common errors like level cap; UI should handle state or user just needs to click promote
+                if (data.reason && (data.reason.includes('Rank Up') || data.reason.includes('Level cap'))) {
+                    // Force a re-render just in case, though without new data it might not change if local state is stale.
+                    // But usually local state matches. 
+                    this.renderContent();
+                } else {
+                    alert(data.reason ? `${data.message}: ${data.reason}` : (data.message || 'Level Up Failed'));
+                }
             }
         } catch (e) {
             console.error(e);
@@ -564,6 +736,32 @@ export class HeroUpgradeModal {
         });
         return currentIndex;
     }
+
+    // Extract heroCodeName from instanceId format: "codename_timestamp_random" -> "codename"
+    // Handles multi-word codeNames like "antelope ranger" -> "Antelope Ranger"
+    private extractHeroCodeNameFromId(instanceId: string): string {
+        if (!instanceId) return '';
+
+        // Instance ID format: "razor_1234567890_123" or "antelope ranger_1234567890_123"
+        // Split by underscore and find the timestamp (a long number) to determine where codename ends
+        const parts = instanceId.split('_');
+
+        // Find the first part that looks like a timestamp (13-digit number)
+        let codeNameParts: string[] = [];
+        for (const part of parts) {
+            // If it's a long number (timestamp), stop
+            if (/^\d{10,}$/.test(part)) break;
+            codeNameParts.push(part);
+        }
+
+        // Title case the code name parts
+        const codeName = codeNameParts.map(p =>
+            p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+        ).join(' ');
+
+        return codeName;
+    }
+
 
     // Copied from GalleryHeroModal
     private calculateHeroPower(stats: { hp: number; atk: number; armor: number; aspd: number; moveSpeed: number }, skills: SkillDefinition[], level: number): number {
@@ -692,5 +890,614 @@ export class HeroUpgradeModal {
 
     getBackdrop(): HTMLElement {
         return this.backdrop;
+    }
+
+    private renderEquipmentPanel(container: HTMLElement) {
+        // Title
+        const title = document.createElement('div');
+        title.innerHTML = `<div style="color: #fbbf24; font-size: 1.1rem; font-weight: bold; text-align: center; margin-bottom: 20px; letter-spacing: 1px;">HERO EQUIPMENT</div>`;
+        container.appendChild(title);
+
+        // Grid
+        const grid = document.createElement('div');
+        grid.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            padding: 10px;
+        `;
+
+        const slots = [
+            { type: 'Weapon', icon: '⚔️' },
+            { type: 'Helmet', icon: '🪖' },
+            { type: 'Armor', icon: '🛡️' },
+            { type: 'Boots', icon: '👢' },
+            { type: 'Ring', icon: '💍' },
+            { type: 'Amulet', icon: '🧿' }
+        ];
+
+        slots.forEach(slot => {
+            const slotEl = document.createElement('div');
+            slotEl.style.cssText = `
+                aspect-ratio: 1;
+                background: rgba(255,255,255,0.05);
+                border: 2px dashed rgba(255,255,255,0.2);
+                border-radius: 12px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+            slotEl.onmouseenter = () => {
+                slotEl.style.background = 'rgba(255,255,255,0.1)';
+                slotEl.style.borderColor = 'rgba(255,255,255,0.4)';
+            };
+            slotEl.onmouseleave = () => {
+                slotEl.style.background = 'rgba(255,255,255,0.05)';
+                slotEl.style.borderColor = 'rgba(255,255,255,0.2)';
+            };
+
+            slotEl.innerHTML = `
+                <div style="font-size: 2rem; opacity: 0.5; margin-bottom: 5px;">${slot.icon}</div>
+                <div style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase;">${slot.type}</div>
+            `;
+            grid.appendChild(slotEl);
+        });
+
+        container.appendChild(grid);
+
+        // Info Text
+        const info = document.createElement('div');
+        info.innerHTML = `<div style="text-align: center; color: #6b7280; font-size: 0.8rem; margin-top: 20px;">Equip items to boost stats.<br>(Coming Soon)</div>`;
+        container.appendChild(info);
+    }
+
+    private renderMergePanel(container: HTMLElement, milestone: any, currentStars: number) {
+        // The next star level is always currentStars + 1 (not milestone.starRequirement which is the gate)
+        const nextStars = currentStars + 1;
+        const heroLevel = this.heroManager.getCurrentLevel();
+
+        console.log('[MergePanel] Rendering:', { currentStars, nextStars, heroLevel, milestone });
+
+        // title
+        const title = document.createElement('div');
+        title.innerHTML = `<div style="color: #fbbf24; font-size: 1.2rem; font-weight: bold; text-align: center; margin-bottom: 20px;">EVOLUTION REQUIRED</div>`;
+        container.appendChild(title);
+
+        // Evolution visual (Hero -> New Hero)
+        const evoVisual = document.createElement('div');
+        evoVisual.style.cssText = `display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 30px;`;
+
+        const heroMainStat = this.heroManager.getConfig().mainStat;
+        // Map stat to attribute icon and color
+        const attrColorMap = { 'STR': '#dc2626', 'AGI': '#16a34a', 'INT': '#2563eb' };
+
+        const attrColor = attrColorMap[heroMainStat] || '#1f2937';
+
+        // Inline SVGs (White fill)
+        const fistSvg = `<svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M19.14,12.94c0.04-0.36,0.06-0.72,0.06-1.09c0-4.08-2.61-7.53-6.23-8.87C12.78,2.44,12.4,2,12,2S11.22,2.44,11.03,2.98C7.41,4.32,4.8,7.77,4.8,11.85c0,0.37,0.02,0.73,0.06,1.09C4.84,13.14,5,13.29,5.22,13.29h1.56c0.16,0,0.31-0.08,0.39-0.22c0.4-0.66,0.92-1.25,1.52-1.74c0.11-0.09,0.15-0.24,0.1-0.38L8.27,9.63c-0.12-0.34-0.03-0.73,0.22-0.98c0.26-0.25,0.65-0.32,0.98-0.17l0.87,0.39C10.68,8.99,11.05,9,11.41,8.91c0.43-0.11,0.68-0.54,0.57-0.97l-0.3-1.18c-0.09-0.35,0.02-0.72,0.29-0.97C12.23,5.54,12.63,5.46,12.97,5.6l0.87,0.38c0.35,0.15,0.74,0.08,1.01-0.19l1.63-1.63c0.39-0.39,1.02-0.39,1.41,0c0.39,0.39,0.39,1.02,0,1.41l-1.63,1.63c-0.27,0.27-0.35,0.66-0.19,1.01l0.38,0.87c0.14,0.31,0.05,0.68-0.21,0.91c-0.26,0.24-0.64,0.29-0.95,0.14l-0.87-0.39c-0.35-0.16-0.75-0.08-1.02,0.2l-0.23,0.23C13.04,9.39,13,9.65,13.06,9.89c0.41,1.56,1.83,2.71,3.53,2.71h1.56C18.66,12.6,18.99,12.97,19.14,12.94z M6,15v4c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2v-4H6z"/></svg>`;
+
+        const bowSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M12 12v10"/><path d="m19 19-7-7"/></svg>`;
+
+        const staffSvg = `<svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M12.5,2.5l-2,2l8,8l2-2L12.5,2.5z M9.5,8.5l-7,7l2,2l7-7L9.5,8.5z M18.5,14.5l-2,2l3.5,3.5l2-2L18.5,14.5z"/></svg>`;
+
+        let attrSvg = fistSvg;
+        if (heroMainStat === 'AGI') attrSvg = bowSvg;
+        if (heroMainStat === 'INT') attrSvg = staffSvg;
+
+        const asset = HERO_ASSETS.find(a => a.name === this.heroAssetName);
+
+        const createHeroBox = (stars: number, showLevel: number) => {
+            // Stars HTML
+            let starsHtml = '';
+            for (let i = 0; i < stars; i++) {
+                starsHtml += `<span style="color: #fbbf24; font-size: 0.8rem; margin: 0 -1px;">★</span>`;
+            }
+
+            // Star-based border colors
+            let borderColor = '#d4af37'; // Default Gold
+            if (stars === 1) borderColor = '#22c55e'; // Green
+            else if (stars === 2) borderColor = '#3b82f6'; // Blue
+            else if (stars === 3) borderColor = '#eab308'; // Yellow
+            else if (stars === 4) borderColor = '#f97316'; // Orange
+            else if (stars === 5) borderColor = '#ef4444'; // Red
+
+            // Image Container
+            const imgContainer = document.createElement('div');
+            imgContainer.style.cssText = `
+                width: 100%; height: 100%;
+                border-radius: 5px;
+                overflow: hidden;
+                position: relative;
+            `;
+
+            if (asset && asset.sprite2D) {
+                const displaySize = 70; // Match box size
+                const framesPerRow = asset.sprite2D.framesPerRow;
+                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
+                const scaledSheetWidth = framesPerRow * displaySize;
+                const scaledSheetHeight = totalRows * displaySize;
+
+                const spritePreview = document.createElement('div');
+                spritePreview.style.cssText = `
+                    width: ${displaySize}px;
+                    height: ${displaySize}px;
+                    background-image: url('${asset.sprite2D.spritesheetPath}');
+                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
+                    background-position: 0 0;
+                    background-repeat: no-repeat;
+                    transform: scale(5) translateY(-12%); 
+                    transform-origin: center center;
+                    filter: saturate(1.1) contrast(1.1);
+                `;
+                imgContainer.appendChild(spritePreview);
+            } else {
+                imgContainer.innerHTML = '<div style="font-size:30px; text-align:center; line-height:70px; color:#6b7280;">?</div>';
+            }
+
+            return `
+                <div style="
+                    width: 70px; height: 70px; 
+                    background: #2a2a2a; 
+                    border: 3px solid ${borderColor};
+                    border-radius: 8px; 
+                    position: relative; 
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+                ">
+                    <!-- Attribute Icon (Top Left) -->
+                    <div style="
+                        position: absolute; top: -5px; left: -5px; 
+                        width: 20px; height: 20px; 
+                        background: ${attrColor}; border: 1px solid #fff; border-radius: 50%;
+                        display: flex; justify-content: center; align-items: center; z-index: 10;
+                    ">
+                        ${attrSvg}
+                    </div>
+
+                    <!-- Level (Top Right) -->
+                     <div style="
+                        position: absolute; top: 2px; right: 4px; 
+                        color: #fff; font-size: 0.7rem; font-weight: bold; text-shadow: 1px 1px 2px #000;
+                        z-index: 10;
+                    ">${showLevel}</div>
+
+                    <!-- Card Image -->
+                    <div style="width:100%; height:100%; overflow:hidden; border-radius:5px;">
+                        ${imgContainer.outerHTML}
+                    </div>
+
+                    <!-- Stars (Bottom) -->
+                    <div style="
+                        position: absolute; bottom: 2px; 
+                        width: 100%; text-align: center; 
+                        display: flex; justify-content: center;
+                        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                        z-index: 10;
+                    ">
+                        ${starsHtml}
+                    </div>
+                </div>
+            `;
+        };
+
+        evoVisual.innerHTML = `
+            ${createHeroBox(currentStars, heroLevel)}
+            <div style="font-size: 1.5rem; color: #6b7280;">➜</div>
+            ${createHeroBox(nextStars, heroLevel)}
+        `;
+        container.appendChild(evoVisual);
+
+        // Limit Info
+        const limitInfo = document.createElement('div');
+        limitInfo.style.cssText = `background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 30px; border: 1px solid rgba(251, 191, 36, 0.3);`;
+        limitInfo.innerHTML = `
+            <div style="color: #fbbf24; font-size: 0.9rem; margin-bottom: 2px;">Max level increased to</div>
+            <div style="color: #fff; font-size: 1.4rem; font-weight: bold;">${milestone.levelCap} ➜ ${milestone.newCap}</div>
+        `;
+        container.appendChild(limitInfo);
+
+        // Requirements - Functional slots
+        const reqTitle = document.createElement('div');
+        reqTitle.style.cssText = `color: #d1d5db; font-size: 0.9rem; margin-bottom: 15px; font-weight: bold;`;
+        reqTitle.innerText = 'Requirements';
+        container.appendChild(reqTitle);
+
+        const reqGrid = document.createElement('div');
+        reqGrid.style.cssText = `display: flex; gap: 10px; justify-content: center; margin-bottom: 40px;`;
+
+        // Define merge recipe based on current star level
+        const recipes: Record<number, { reqSameHero: boolean; reqSameAttr: boolean; count: number; starLevel: number }> = {
+            1: { reqSameHero: true, reqSameAttr: false, count: 2, starLevel: 1 },
+            2: { reqSameHero: false, reqSameAttr: true, count: 3, starLevel: 2 },
+            3: { reqSameHero: true, reqSameAttr: false, count: 1, starLevel: 3 },
+            4: { reqSameHero: false, reqSameAttr: true, count: 1, starLevel: 4 },
+        };
+
+        const recipe = recipes[currentStars];
+        const reqCount = recipe?.count || 0;
+        const reqText = recipe?.reqSameHero ? 'Same Hero' : 'Same Attr';
+
+        // Get main hero data for matching
+        let mainHeroData: any;
+        if (this.user.heroes instanceof Map) {
+            mainHeroData = this.user.heroes.get(this.instanceId);
+        } else {
+            mainHeroData = this.user.heroes[this.instanceId];
+        }
+        // Extract heroCodeName from data or derive from instanceId (format: codename_timestamp_random)
+        const mainHeroCodeName = mainHeroData?.heroCodeName || this.extractHeroCodeNameFromId(this.instanceId);
+        const mainHeroAttribute = mainHeroData?.attribute || 'STR';
+        console.log('[MergePanel] Main hero:', { instanceId: this.instanceId, heroCodeName: mainHeroCodeName, attribute: mainHeroAttribute });
+
+        for (let i = 0; i < reqCount; i++) {
+            const slotIndex = i;
+            const selectedId = this.selectedSacrifices.get(slotIndex);
+            const slot = document.createElement('div');
+
+            if (selectedId) {
+                // Show selected hero preview
+                let selectedHero: any;
+                if (this.user.heroes instanceof Map) {
+                    selectedHero = this.user.heroes.get(selectedId);
+                } else {
+                    selectedHero = this.user.heroes[selectedId];
+                }
+
+                const heroStars = selectedHero?.stars || 1;
+                let starsHtml = '';
+                for (let s = 0; s < heroStars; s++) {
+                    starsHtml += `<span style="color: #fbbf24; font-size: 0.5rem;">★</span>`;
+                }
+
+                slot.style.cssText = `
+                    width: 60px; height: 60px; background: rgba(34, 197, 94, 0.2); 
+                    border: 2px solid #22c55e; border-radius: 8px;
+                    display: flex; flex-direction: column; justify-content: center; align-items: center;
+                    cursor: pointer; transition: all 0.2s; position: relative;
+                `;
+                slot.innerHTML = `
+                    <div style="font-size: 1.5rem;">✓</div>
+                    <div style="font-size: 0.5rem; color: #22c55e; text-align: center;">${starsHtml}</div>
+                `;
+            } else {
+                slot.style.cssText = `
+                    width: 60px; height: 60px; background: rgba(0,0,0,0.4); 
+                    border: 2px dashed #4b5563; border-radius: 8px;
+                    display: flex; flex-direction: column; justify-content: center; align-items: center;
+                    cursor: pointer; transition: all 0.2s;
+                `;
+                slot.innerHTML = `
+                    <div style="font-size: 1.2rem; color: #6b7280;">+</div>
+                    <div style="font-size: 0.5rem; color: #6b7280; text-align: center;">${reqText}</div>
+                `;
+            }
+
+            slot.onmouseenter = () => {
+                slot.style.borderColor = '#fbbf24';
+                slot.style.background = selectedId ? 'rgba(251, 191, 36, 0.2)' : 'rgba(251, 191, 36, 0.1)';
+            };
+            slot.onmouseleave = () => {
+                slot.style.borderColor = selectedId ? '#22c55e' : '#4b5563';
+                slot.style.background = selectedId ? 'rgba(34, 197, 94, 0.2)' : 'rgba(0,0,0,0.4)';
+            };
+            slot.onclick = () => this.showHeroSelectionModal(slotIndex, {
+                sameHero: recipe.reqSameHero,
+                sameAttribute: recipe.reqSameAttr,
+                requiredStars: recipe.starLevel,
+                mainHeroCodeName,
+                mainHeroAttribute
+            });
+            reqGrid.appendChild(slot);
+        }
+        container.appendChild(reqGrid);
+
+        // Forge Button
+        const allSlotsFilled = this.selectedSacrifices.size >= reqCount;
+        const forgeBtn = document.createElement('button');
+        forgeBtn.innerText = allSlotsFilled ? 'FORGE' : 'Select Heroes';
+        forgeBtn.style.cssText = `
+            width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold;
+            background: ${allSlotsFilled ? 'linear-gradient(to bottom, #fcd34d, #f59e0b)' : 'linear-gradient(to bottom, #4b5563, #374151)'};
+            border: none; border-radius: 12px; 
+            color: ${allSlotsFilled ? '#78350f' : '#9ca3af'}; 
+            cursor: ${allSlotsFilled ? 'pointer' : 'not-allowed'};
+            box-shadow: ${allSlotsFilled ? '0 4px 0 #b45309, 0 5px 10px rgba(0,0,0,0.3)' : '0 2px 0 #1f2937'};
+            transition: all 0.1s;
+        `;
+
+        if (allSlotsFilled) {
+            forgeBtn.onmousedown = () => { forgeBtn.style.transform = 'translateY(4px)'; forgeBtn.style.boxShadow = '0 0 0 #b45309, inset 0 2px 5px rgba(0,0,0,0.2)'; };
+            forgeBtn.onmouseup = () => { forgeBtn.style.transform = 'translateY(0)'; forgeBtn.style.boxShadow = '0 4px 0 #b45309, 0 5px 10px rgba(0,0,0,0.3)'; };
+            forgeBtn.onmouseleave = () => { forgeBtn.style.transform = 'translateY(0)'; forgeBtn.style.boxShadow = '0 4px 0 #b45309, 0 5px 10px rgba(0,0,0,0.3)'; };
+            forgeBtn.onclick = () => this.handleMerge();
+        }
+
+        container.appendChild(forgeBtn);
+    }
+
+    private showHeroSelectionModal(slotIndex: number, requirements: {
+        sameHero: boolean;
+        sameAttribute: boolean;
+        requiredStars: number;
+        mainHeroCodeName: string;
+        mainHeroAttribute: string;
+    }) {
+        // Remove any existing selection modal
+        this.closeHeroSelectionModal();
+
+        // Get all heroes and filter by requirements
+        const heroes: { id: string; hero: any }[] = [];
+        const heroesData = this.user.heroes;
+
+        if (heroesData instanceof Map) {
+            heroesData.forEach((hero: any, id: string) => {
+                heroes.push({ id, hero });
+            });
+        } else if (heroesData) {
+            Object.entries(heroesData).forEach(([id, hero]) => {
+                heroes.push({ id, hero: hero as any });
+            });
+        }
+
+        // Debug: Log requirements and available heroes
+        console.log('[HeroSelection] Filter requirements:', requirements);
+        console.log('[HeroSelection] All heroes:', heroes.map(({ id, hero }) => ({
+            id,
+            heroCodeName: hero.heroCodeName,
+            stars: hero.stars || 1,
+            attribute: hero.attribute
+        })));
+
+        // Filter heroes
+        const filteredHeroes = heroes.filter(({ id, hero }) => {
+            // Exclude main hero
+            if (id === this.instanceId) {
+                console.log(`[HeroSelection] Excluding ${id}: is main hero`);
+                return false;
+            }
+
+            // Exclude already selected heroes
+            for (const selectedId of this.selectedSacrifices.values()) {
+                if (selectedId === id) {
+                    console.log(`[HeroSelection] Excluding ${id}: already selected`);
+                    return false;
+                }
+            }
+
+            // Check star level
+            const stars = hero.stars || 1;
+            if (stars !== requirements.requiredStars) {
+                console.log(`[HeroSelection] Excluding ${id}: stars ${stars} !== required ${requirements.requiredStars}`);
+                return false;
+            }
+
+            // Check same hero requirement (case-insensitive comparison)
+            if (requirements.sameHero) {
+                // Get heroCodeName from data or extract from instanceId
+                const sacHeroCodeName = hero.heroCodeName || this.extractHeroCodeNameFromId(id);
+                const heroName = sacHeroCodeName.toLowerCase().trim();
+                const mainName = (requirements.mainHeroCodeName || '').toLowerCase().trim();
+                if (heroName !== mainName) {
+                    console.log(`[HeroSelection] Excluding ${id}: heroCodeName "${sacHeroCodeName}" !== "${requirements.mainHeroCodeName}"`);
+                    return false;
+                }
+            }
+
+            // Check same attribute requirement
+            if (requirements.sameAttribute) {
+                const attr = hero.attribute || 'STR';
+                if (attr !== requirements.mainHeroAttribute) {
+                    console.log(`[HeroSelection] Excluding ${id}: attribute ${attr} !== ${requirements.mainHeroAttribute}`);
+                    return false;
+                }
+            }
+
+            console.log(`[HeroSelection] Including ${id}`);
+            return true;
+        });
+
+        console.log('[HeroSelection] Filtered heroes:', filteredHeroes.length);
+
+        // Create modal
+        const modalBackdrop = document.createElement('div');
+        modalBackdrop.style.cssText = `
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+            z-index: 100010; display: flex; justify-content: center; align-items: center;
+        `;
+        modalBackdrop.onclick = (e) => {
+            if (e.target === modalBackdrop) this.closeHeroSelectionModal();
+        };
+
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px; padding: 20px; min-width: 400px; max-width: 80%;
+            max-height: 70vh; overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);`;
+        header.innerHTML = `
+            <div style="color: #fbbf24; font-size: 1.2rem; font-weight: bold;">Select Sacrifice Hero</div>
+            <div style="color: #6b7280; font-size: 0.8rem;">
+                ${requirements.sameHero ? 'Same Hero' : 'Same Attribute'} • ${requirements.requiredStars}★
+            </div>
+        `;
+        modal.appendChild(header);
+
+        if (filteredHeroes.length === 0) {
+            const noHeroes = document.createElement('div');
+            noHeroes.style.cssText = `text-align: center; color: #9ca3af; padding: 40px 20px;`;
+            noHeroes.innerHTML = `
+                <div style="font-size: 3rem; margin-bottom: 10px;">😢</div>
+                <div>No eligible heroes found.</div>
+                <div style="font-size: 0.8rem; margin-top: 5px; color: #6b7280;">
+                    Need: ${requirements.requiredStars}★ ${requirements.sameHero ? 'same hero' : `${requirements.mainHeroAttribute} attribute`}
+                </div>
+            `;
+            modal.appendChild(noHeroes);
+        } else {
+            // Hero grid
+            const grid = document.createElement('div');
+            grid.style.cssText = `display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px;`;
+
+            filteredHeroes.forEach(({ id, hero }) => {
+                const card = document.createElement('div');
+                const stars = hero.stars || 1;
+                let starsHtml = '';
+                for (let s = 0; s < stars; s++) {
+                    starsHtml += `<span style="color: #fbbf24;">★</span>`;
+                }
+
+                // Find asset for sprite preview
+                const asset = HERO_ASSETS.find(a =>
+                    a.name.toLowerCase().includes(hero.heroCodeName?.toLowerCase() || '') ||
+                    hero.heroCodeName?.toLowerCase().includes(a.name.toLowerCase())
+                );
+
+                let heroPreview = '<div style="font-size: 24px;">🦸</div>';
+                if (asset?.sprite2D) {
+                    const displaySize = 60;
+                    const framesPerRow = asset.sprite2D.framesPerRow;
+                    const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
+                    const scaledSheetWidth = framesPerRow * displaySize;
+                    const scaledSheetHeight = totalRows * displaySize;
+                    heroPreview = `
+                        <div style="
+                            width: ${displaySize}px; height: ${displaySize}px;
+                            background-image: url('${asset.sprite2D.spritesheetPath}');
+                            background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
+                            background-position: 0 0;
+                            transform: scale(3.5) translateY(-10%);
+                            transform-origin: center center;
+                        "></div>
+                    `;
+                }
+
+                card.style.cssText = `
+                    background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1);
+                    border-radius: 10px; padding: 8px; cursor: pointer; transition: all 0.2s;
+                    display: flex; flex-direction: column; align-items: center; overflow: hidden;
+                `;
+                card.innerHTML = `
+                    <div style="width: 60px; height: 60px; overflow: hidden; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.3);">
+                        ${heroPreview}
+                    </div>
+                    <div style="font-size: 0.6rem; color: #fff; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">
+                        ${hero.heroCodeName || 'Hero'}
+                    </div>
+                    <div style="font-size: 0.7rem;">${starsHtml}</div>
+                `;
+
+                card.onmouseenter = () => {
+                    card.style.borderColor = '#fbbf24';
+                    card.style.background = 'rgba(251, 191, 36, 0.2)';
+                };
+                card.onmouseleave = () => {
+                    card.style.borderColor = 'rgba(255,255,255,0.1)';
+                    card.style.background = 'rgba(255,255,255,0.05)';
+                };
+                card.onclick = () => {
+                    this.selectedSacrifices.set(slotIndex, id);
+                    this.closeHeroSelectionModal();
+                    this.renderContent(); // Re-render to show updated slots
+                };
+
+                grid.appendChild(card);
+            });
+
+            modal.appendChild(grid);
+        }
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = 'Cancel';
+        closeBtn.style.cssText = `
+            width: 100%; margin-top: 20px; padding: 12px; font-size: 1rem;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px; color: #fff; cursor: pointer; transition: all 0.2s;
+        `;
+        closeBtn.onmouseenter = () => { closeBtn.style.background = 'rgba(255,255,255,0.2)'; };
+        closeBtn.onmouseleave = () => { closeBtn.style.background = 'rgba(255,255,255,0.1)'; };
+        closeBtn.onclick = () => this.closeHeroSelectionModal();
+        modal.appendChild(closeBtn);
+
+        modalBackdrop.appendChild(modal);
+        document.body.appendChild(modalBackdrop);
+        this.heroSelectionModal = modalBackdrop;
+    }
+
+    private closeHeroSelectionModal() {
+        if (this.heroSelectionModal) {
+            this.heroSelectionModal.remove();
+            this.heroSelectionModal = null;
+        }
+    }
+
+    private async handleMerge() {
+        try {
+            const sacrificeIds = Array.from(this.selectedSacrifices.values());
+
+            if (sacrificeIds.length === 0) {
+                alert('Please select sacrifice heroes first.');
+                return;
+            }
+
+            const res = await fetch('http://localhost:3000/api/hero/merge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commanderName: this.user.commanderName,
+                    mainHeroId: this.instanceId,
+                    sacrificeIds
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Update local user state
+                this.user = data.user;
+                this.onUpdate(data.user);
+
+                // Clear selections
+                this.selectedSacrifices.clear();
+
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.style.cssText = `
+                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #22c55e, #16a34a); padding: 30px 50px;
+                    border-radius: 16px; z-index: 100020; text-align: center;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                    animation: scaleIn 0.3s ease;
+                `;
+                successMsg.innerHTML = `
+                    <div style="font-size: 4rem; margin-bottom: 10px;">⭐</div>
+                    <div style="color: #fff; font-size: 1.5rem; font-weight: bold;">Evolution Complete!</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 1rem; margin-top: 5px;">
+                        Hero upgraded to ${data.newStars}★
+                    </div>
+                `;
+                document.body.appendChild(successMsg);
+
+                setTimeout(() => {
+                    successMsg.remove();
+                    // Re-render to show new state
+                    this.renderContent();
+                }, 1500);
+
+            } else {
+                alert(data.message || 'Merge failed. Please try again.');
+            }
+        } catch (e) {
+            console.error('Merge Error:', e);
+            alert('Network error. Please check your connection.');
+        }
     }
 }

@@ -114,10 +114,9 @@ export class HeroList {
             const canonicalName = def.codeName;
 
             const species = def.name.split(' ')[0];
-            let stars = 1;
-            if (def.rarity === 'Mythic') stars = 5;
-            else if (def.rarity === 'Legendary') stars = 4;
-            else if (def.rarity === 'Rare') stars = 3;
+
+            // Use actual star level from hero data (set by merge), or default to 1
+            const stars = heroData.stars || 1;
 
             // Find asset data (using canonical name)
             const asset = HERO_ASSETS.find(a => a.name === canonicalName);
@@ -281,7 +280,7 @@ export class HeroList {
                 max-width: 180px;
                 background: linear-gradient(135deg, #3d2815 0%, #5c3d25 100%);
                 border-radius: 15px;
-                padding: 15px;
+                padding: 2px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -293,7 +292,6 @@ export class HeroList {
             }
             .hero-card:hover {
                 transform: translateY(-5px) scale(1.02);
-                box-shadow: 0 10px 30px rgba(0,0,0,0.4);
                 border-color: #ffd700;
                 z-index: 10;
             }
@@ -359,8 +357,31 @@ export class HeroList {
         const card = document.createElement('div');
         card.className = 'hero-card';
 
+        // Star-based border colors
+        let borderColor = '#d4af37'; // Default Gold
+        if (hero.stars === 1) borderColor = '#22c55e'; // Green
+        else if (hero.stars === 2) borderColor = '#3b82f6'; // Blue
+        else if (hero.stars === 3) borderColor = '#eab308'; // Yellow
+        else if (hero.stars === 4) borderColor = '#f97316'; // Orange
+        else if (hero.stars === 5) borderColor = '#ef4444'; // Red
+
+        // Basic card styling to match the new design
+        card.style.cssText = `
+            width: 180px; height: 180px; 
+            background: #2a2a2a; 
+            border: 3px solid ${borderColor};
+            border-radius: 12px; 
+            position: relative; 
+            cursor: pointer;
+            transition: transform 0.1s;
+        `;
+
         // Selection Logic Reuse
-        if (this.selectedHeroes.has(hero.name)) card.classList.add('selected');
+        if (this.selectedHeroes.has(hero.name)) {
+            card.classList.add('selected');
+            card.style.boxShadow = '0 0 15px #00ff00';
+            card.style.borderColor = '#00ff00';
+        }
 
         const clickHandler = () => {
             console.log('[HeroList] Card clicked for:', hero.name, 'ID:', hero.instanceId);
@@ -370,25 +391,20 @@ export class HeroList {
                     if (this.selectedHeroes.size >= 6) { alert("Team is full!"); return; }
                     this.selectedHeroes.add(hero.name);
                 }
-                this.render(); // Re-render to update UI
+                this.render();
                 this.onSelect(Array.from(this.selectedHeroes));
             } else {
                 // VIEW MODE - OPEN UPGRADE UI
-                // Find asset and create upgrade modal
                 const asset = HERO_ASSETS.find(a => a.name === hero.name);
-
                 if (asset && this.user) {
                     if (!hero.instanceId) {
                         console.error('[HeroList] ERROR: Hero instanceId is missing!', hero);
-                        alert('Error: Hero data is corrupted (missing instance ID). Please refresh.');
+                        alert('Error: Hero data is corrupted. Please refresh.');
                         return;
                     }
                     const upgradeModal = new HeroUpgradeModal(asset, hero.instanceId, this.user,
-                        () => {
-                            this.render();
-                        },
+                        () => { this.render(); },
                         (updatedUser) => {
-                            // On User Update (Level Up)
                             this.user = updatedUser;
                             if (this.onUserUpdate) this.onUserUpdate(updatedUser);
                             this.loadHeroes();
@@ -398,35 +414,46 @@ export class HeroList {
                     document.body.appendChild(upgradeModal.getBackdrop());
                     document.body.appendChild(upgradeModal.getElement());
                 } else {
-                    console.log('[HeroList] Fallback to onView');
                     if (this.onView) this.onView(hero.name);
                 }
             }
         };
-        // Bind correct click handler
         card.onclick = clickHandler;
 
+        // Hover effect (scale only, no animation)
+        card.onmouseenter = () => { card.style.transform = 'scale(1.05)'; };
+        card.onmouseleave = () => { card.style.transform = 'scale(1)'; };
+
+        // --- Inner Content ---
+
+        // Map stat to attribute icon and color
+        const attrColorMap = { 'Strength': '#dc2626', 'Agility': '#16a34a', 'Intelligence': '#2563eb' }; // Red, Green, Blue
+        const attrColor = (attrColorMap as any)[hero.attribute] || '#1f2937';
+
+        // Icon Paths
+        let iconPath = '/assets/attr/attribute/str.svg';
+        if (hero.attribute === 'Agility') iconPath = '/assets/attr/attribute/agi.svg';
+        if (hero.attribute === 'Intelligence') iconPath = '/assets/attr/attribute/int.svg';
+
+        // Stars HTML
+        let starsHtml = '';
+        for (let i = 0; i < hero.stars; i++) {
+            starsHtml += `<span style="color: #fbbf24; font-size: 2rem; margin: 0 -2px;">★</span>`;
+        }
+
+        const asset = HERO_ASSETS.find(a => a.name === hero.name);
 
         // Image Container
         const imgContainer = document.createElement('div');
         imgContainer.style.cssText = `
-            width: 120px;
-            height: 120px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 10px;
+            width: 100%; height: 100%;
+            border-radius: 9px;
             overflow: hidden;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            pointer-events: none;
+            position: relative;
         `;
 
-        // Load Asset Data
-        const asset = HERO_ASSETS.find(a => a.name === hero.name);
-
         if (asset && asset.sprite2D) {
-            const displaySize = 120;
+            const displaySize = 180; // Match card size (updated by user)
             const framesPerRow = asset.sprite2D.framesPerRow;
             const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
             const scaledSheetWidth = framesPerRow * displaySize;
@@ -440,62 +467,106 @@ export class HeroList {
                 background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
                 background-position: 0 0;
                 background-repeat: no-repeat;
-                transform: scale(6) translateX(3%) translateY(-25%);
-                transform-origin: center top;
-                filter: saturate(0.7) contrast(1.3) brightness(1.5);
+                /* Scale to zoom in on the character face/body */
+                transform: scale(3.5) translateY(10%) translateX(4%); 
+                transform-origin: center center;
+                filter: saturate(1.1) contrast(1.1);
             `;
             imgContainer.appendChild(spritePreview);
-
-            let frameIndex = 0;
-            let animInterval: number | null = null;
-            card.onmouseenter = () => {
-                animInterval = window.setInterval(() => {
-                    frameIndex = (frameIndex + 1) % asset.sprite2D!.totalFrames;
-                    const col = frameIndex % framesPerRow;
-                    const row = Math.floor(frameIndex / framesPerRow);
-                    spritePreview.style.backgroundPosition = `-${col * displaySize}px -${row * displaySize}px`;
-                }, 1000 / (asset.sprite2D!.fps || 12));
-            };
-            card.onmouseleave = () => {
-                if (animInterval) {
-                    clearInterval(animInterval);
-                    animInterval = null;
-                }
-                frameIndex = 0;
-                spritePreview.style.backgroundPosition = '0 0';
-            };
         } else {
-            const placeholder = document.createElement('div');
-            placeholder.innerText = '🦸';
-            placeholder.style.fontSize = '50px';
-            imgContainer.appendChild(placeholder);
+            // Fallback
+            imgContainer.innerHTML = '<div style="font-size:40px; text-align:center; line-height:100px;">?</div>';
         }
 
-        card.appendChild(imgContainer);
+        // Determine Class and Species based on Hero Name
+        let heroClass = 'Unknown';
+        let heroSpecies = 'Unknown';
+        let classIconChar = '?';
+        let speciesIconChar = '?';
+        let classColor = '#4b2c20'; // Brown default
+        let speciesColor = '#2d4a22'; // Green default
 
-        // Hero Name
-        const nameLabel = document.createElement('div');
-        nameLabel.innerText = hero.name;
-        nameLabel.style.cssText = `
-            color: #f5deb3;
-            font-size: 0.9rem;
-            font-weight: bold;
-            text-align: center;
-            font-family: 'SF Pro Rounded', sans-serif;
-            pointer-events: none;
-        `;
-        card.appendChild(nameLabel);
+        const lowerName = hero.name.toLowerCase();
+        if (lowerName.includes('oryx') || lowerName.includes('mage')) {
+            heroClass = 'Mage';
+            heroSpecies = 'Antelope';
+            classIconChar = '🔮';
+            speciesIconChar = '🦌';
+            classColor = '#9333ea'; // Purple
+            speciesColor = '#ca8a04'; // Dark Yellow/Brown
+        } else if (lowerName.includes('sable') || lowerName.includes('ranger')) {
+            heroClass = 'Ranger';
+            heroSpecies = 'Antelope';
+            classIconChar = '🏹';
+            speciesIconChar = '🦌';
+            classColor = '#16a34a'; // Green
+            speciesColor = '#ca8a04'; // Dark Yellow/Brown
+        } else if (lowerName.includes('razor') || lowerName.includes('assassin') || lowerName.includes('boar')) {
+            heroClass = 'Assassin';
+            heroSpecies = 'Boar';
+            classIconChar = '🗡️';
+            speciesIconChar = '🐗';
+            classColor = '#dc2626'; // Red
+            speciesColor = '#7f1d1d'; // Dark Red/Brown
+        }
 
-        // Level
-        const levelLabel = document.createElement('div');
-        levelLabel.innerText = `Lv. ${hero.level}`;
-        levelLabel.style.cssText = `
-            color: #aaa;
-            font-size: 0.8rem;
-            margin-top: 4px;
-            pointer-events: none;
+        card.innerHTML = `
+            <!-- Attribute Icon (Top Left) -->
+            <div style="
+                position: absolute; top: -8px; left: -8px; 
+                width: 28px; height: 28px; 
+                background: ${attrColor}; border: 1px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 10;
+                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            " title="Attribute: ${hero.attribute}">
+                <img src="${iconPath}" style="width: 18px; height: 18px; filter: brightness(0) invert(1);">
+            </div>
+
+            <!-- Class Icon (Below Attribute) -->
+            <div style="
+                position: absolute; top: 24px; left: -8px; 
+                width: 28px; height: 28px; 
+                background: ${classColor}; border: 1px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 9;
+                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            " title="Class: ${heroClass}">
+                <span style="font-size: 14px;">${classIconChar}</span>
+            </div>
+
+            <!-- Species Icon (Below Class) -->
+            <div style="
+                position: absolute; top: 56px; left: -8px; 
+                width: 28px; height: 28px; 
+                background: ${speciesColor}; border: 1px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 8;
+                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            " title="Species: ${heroSpecies}">
+                <span style="font-size: 14px;">${speciesIconChar}</span>
+            </div>
+
+            <!-- Level (Top Right) -->
+                <div style="
+                position: absolute; top: 5px; right: 8px; 
+                color: #fff; font-size: 1.1rem; font-weight: bold; text-shadow: 1px 1px 2px #000;
+                z-index: 10; font-family: 'SF Pro Rounded', sans-serif;
+            ">${hero.level}</div>
+
+            <!-- Card Image (Appended via JS) -->
+            <div class="card-image-slot" style="width:100%; height:100%;"></div>
+
+            <!-- Stars (Bottom) -->
+            <div style="
+                position: absolute; bottom: 5px; 
+                width: 100%; text-align: center; 
+                display: flex; justify-content: center;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                z-index: 10;
+            ">
+                ${starsHtml}
+            </div>
         `;
-        card.appendChild(levelLabel);
+
+        card.querySelector('.card-image-slot')?.appendChild(imgContainer);
 
         return card;
     }
