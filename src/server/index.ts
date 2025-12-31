@@ -273,14 +273,14 @@ app.post('/api/summon', async (req, res) => {
 
         // Check Resources
         const inventory = user.inventory || new Map();
-        const currentBooks = inventory.get('summon_book') || 0;
+        const currentScrolls = inventory.get('grand_summon') || 0;
 
-        if (currentBooks < 1) {
-            return res.status(400).json({ message: 'Not enough Summon Books' });
+        if (currentScrolls < 1) {
+            return res.status(400).json({ message: 'Not enough Grand Summon Scrolls' });
         }
 
         // Deduct Resource
-        inventory.set('summon_book', currentBooks - 1);
+        inventory.set('grand_summon', currentScrolls - 1);
         user.inventory = inventory;
 
         // Pick Hero
@@ -324,7 +324,7 @@ app.post('/api/summon', async (req, res) => {
         console.log(`[Summon] ${commanderName} summoned ${hero.name}`);
         res.json({
             hero,
-            remainingBooks: currentBooks - 1,
+            remainingScrolls: currentScrolls - 1,
             user: sanitizeUser(user), // Return updated user state
             instanceId: instanceId
         });
@@ -351,6 +351,7 @@ app.post('/api/hero/levelup', async (req, res) => {
         }
 
         const heroData = userAny.heroes.get(instanceId);
+        console.log(`[LevelUp] heroData from DB:`, JSON.stringify({ stars: heroData?.stars, heroCodeName: heroData?.heroCodeName, level: heroData?.level }));
         // Fallback: if heroCodeName is missing in instance (legacy), we might need to derive it or fail.
         // For now assume new instances have it or legacy keys are codeNames.
         const heroCodeName = heroData.heroCodeName || instanceId; // Legacy support: key was codeName
@@ -389,7 +390,16 @@ app.post('/api/hero/levelup', async (req, res) => {
         user.soulPotion = result.newInventory.soulPotion;
         // user.inventory is not used for these resources anymore
 
-        userAny.heroes.set(instanceId, manager.getHeroInstance());
+        // Preserve metadata that isn't part of the manager's instance
+        console.log(`[LevelUp] Before save - heroData.stars: ${heroData.stars}`);
+        const updatedInstance = {
+            ...manager.getHeroInstance(),
+            heroCodeName: heroData.heroCodeName,
+            stars: heroData.stars || 1,
+            attribute: heroData.attribute
+        };
+        console.log(`[LevelUp] Saving updatedInstance with stars: ${updatedInstance.stars}`);
+        userAny.heroes.set(instanceId, updatedInstance);
         user.markModified('heroes'); // Vital for Map updates
 
         await user.save();
@@ -406,6 +416,94 @@ app.post('/api/hero/levelup', async (req, res) => {
 
     } catch (error) {
         console.error("LevelUp Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// BULK LEVEL UP Endpoint (Level up multiple times at once)
+app.post('/api/hero/levelup-bulk', async (req, res) => {
+    try {
+        const { commanderName, instanceId, levels } = req.body;
+        if (!commanderName || !instanceId || !levels) return res.status(400).json({ message: 'Missing fields' });
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+
+        if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+            return res.status(404).json({ message: 'Hero instance not found' });
+        }
+
+        const heroData = userAny.heroes.get(instanceId);
+        const heroCodeName = heroData.heroCodeName || instanceId;
+
+        let manager = getHeroManager(heroCodeName, heroData);
+        const currentLevel = manager.getCurrentLevel();
+        const currentLevelCap = manager.getCurrentLevelCap();
+        const maxLevels = Math.min(levels, currentLevelCap - currentLevel);
+
+        if (maxLevels <= 0) {
+            return res.status(400).json({ message: 'Already at level cap' });
+        }
+
+        // Calculate total cost for all levels
+        let totalGold = 0;
+        let totalSoulPotion = 0;
+        for (let i = 0; i < maxLevels; i++) {
+            const cost = manager.getNextLevelCost(currentLevel + i);
+            totalGold += cost.gold;
+            totalSoulPotion += cost.soulPotion;
+        }
+
+        // Check resources
+        if ((user.gold || 0) < totalGold || (user.soulPotion || 0) < totalSoulPotion) {
+            return res.status(400).json({
+                message: 'Insufficient resources',
+                reason: `Need ${totalGold} Gold and ${totalSoulPotion} Soul Potions`
+            });
+        }
+
+        // Perform all level ups
+        for (let i = 0; i < maxLevels; i++) {
+            const playerInventory = {
+                gold: user.gold || 0,
+                heroPotion: user.heroPotion || 0,
+                soulPotion: user.soulPotion || 0
+            };
+
+            const result = manager.performLevelUp(playerInventory);
+            if (!result.success) {
+                break;
+            }
+
+            user.gold = result.newInventory.gold;
+            user.soulPotion = result.newInventory.soulPotion;
+        }
+
+        // Preserve metadata that isn't part of the manager's instance
+        const updatedInstance = {
+            ...manager.getHeroInstance(),
+            heroCodeName: heroData.heroCodeName,
+            stars: heroData.stars || 1,
+            attribute: heroData.attribute
+        };
+        userAny.heroes.set(instanceId, updatedInstance);
+        user.markModified('heroes');
+
+        await user.save();
+
+        console.log(`[BulkLevelUp] ${commanderName} leveled ${instanceId} from ${currentLevel} to ${manager.getCurrentLevel()}`);
+
+        res.json({
+            success: true,
+            newLevel: manager.getCurrentLevel(),
+            levelsGained: manager.getCurrentLevel() - currentLevel,
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("BulkLevelUp Error:", error);
         res.status(500).json({ message: (error as Error).message });
     }
 });
@@ -475,7 +573,16 @@ app.post('/api/hero/rankup', async (req, res) => {
         user.heroPotion = result.newInventory.heroPotion; // Update Hero Potion
         // soul potion unchanged for rank up
 
-        userAny.heroes.set(instanceId, manager.getHeroInstance());
+        // Preserve metadata that isn't part of the manager's instance
+        console.log(`[RankUp] Before save - heroData.stars: ${heroData.stars}, heroStars: ${heroStars}`);
+        const updatedInstance = {
+            ...manager.getHeroInstance(),
+            heroCodeName: heroData.heroCodeName,
+            stars: heroData.stars || 1,
+            attribute: heroData.attribute
+        };
+        console.log(`[RankUp] Saving updatedInstance with stars: ${updatedInstance.stars}`);
+        userAny.heroes.set(instanceId, updatedInstance);
         user.markModified('heroes');
 
         await user.save();

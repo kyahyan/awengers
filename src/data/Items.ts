@@ -8,11 +8,32 @@ export interface ItemDef {
 }
 
 export const ITEMS: Record<string, ItemDef> = {
-    "summon_book": {
-        id: "summon_book",
-        name: "Summon Book",
-        icon: "/assets/summon/summon-book/summon-book-1.png",
-        description: "A mystical book used to summon heroes.",
+    "grand_summon": {
+        id: "grand_summon",
+        name: "Grand Summon Scroll",
+        icon: "/assets/home/scroll/grand-summon.png",
+        description: "A mystical scroll used to summon heroes.",
         type: "consumable"
+    },
+    "common_summon": {
+        id: "common_summon",
+        name: "Common Summon Scroll",
+        icon: "/assets/home/scroll/common-summon.png",
+        description: "A basic scroll for common summons.",
+        type: "consumable"
+    },
+    "mythic_summon": {
+        id: "mythic_summon",
+        name: "Mythic Summon Scroll",
+        icon: "/assets/home/scroll/mythic-summon.png",
+        description: "A legendary scroll for mythic summons.",
+        type: "consumable"
+    },
+    "shards": {
+        id: "shards",
+        name: "Hero Shards",
+        icon: "/assets/home/scroll/shards.png",
+        description: "Fragments used to unlock specific heroes.",
+        type: "material"
     }
 };

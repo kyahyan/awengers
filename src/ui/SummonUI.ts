@@ -11,6 +11,8 @@ export class SummonUI {
     private cardImg!: HTMLImageElement;
     private resultOverlay!: HTMLElement;
     private onUpdate?: (user: UserProfile) => void;
+    private summonBtnX1!: HTMLElement;
+    private summonBtnX10!: HTMLElement;
 
     constructor(onClose: () => void, onUpdate?: (user: UserProfile) => void) {
         this.onUpdate = onUpdate;
@@ -32,11 +34,11 @@ export class SummonUI {
         content.style.position = 'relative';
         content.style.overflow = 'hidden';
 
-        // The Summon "Card" Image
+        // The Summon "Scroll" Image
         this.cardImg = document.createElement('img');
-        this.cardImg.src = '/assets/summon/bg-summon.png';
-        this.cardImg.style.maxHeight = '70%';
-        this.cardImg.style.maxWidth = '80%';
+        this.cardImg.src = '/assets/home/scroll/grand-summon.png';
+        this.cardImg.style.maxHeight = '50%';
+        this.cardImg.style.maxWidth = '60%';
         this.cardImg.style.objectFit = 'contain';
         this.cardImg.style.cursor = 'pointer';
         this.cardImg.style.transition = 'transform 0.2s, filter 0.2s';
@@ -61,39 +63,112 @@ export class SummonUI {
 
         content.appendChild(this.cardImg);
 
-        // Summon Button
-        const summonBtn = document.createElement('div');
-        summonBtn.innerText = "SUMMON (1 Book)";
-        summonBtn.style.marginTop = '30px';
-        summonBtn.style.padding = '15px 50px';
-        summonBtn.style.background = 'linear-gradient(45deg, #ffd700, #ffa500)';
-        summonBtn.style.border = '3px solid #fff';
-        summonBtn.style.borderRadius = '35px';
-        summonBtn.style.color = '#000';
-        summonBtn.style.fontWeight = 'bold';
-        summonBtn.style.fontSize = '1.4rem';
-        summonBtn.style.cursor = 'pointer';
-        summonBtn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
-        summonBtn.style.transition = 'transform 0.2s, box-shadow 0.2s';
-        summonBtn.style.fontFamily = "'SF Pro Rounded', sans-serif";
+        // Scroll Count Display
+        const scrollCountDisplay = document.createElement('div');
+        scrollCountDisplay.id = 'scroll-count-display';
+        scrollCountDisplay.style.marginTop = '15px';
+        scrollCountDisplay.style.color = '#ffd700';
+        scrollCountDisplay.style.fontSize = '1.2rem';
+        scrollCountDisplay.style.fontWeight = 'bold';
+        scrollCountDisplay.style.fontFamily = "'SF Pro Rounded', sans-serif";
+        scrollCountDisplay.style.textShadow = '0 2px 4px rgba(0,0,0,0.5)';
+        this.updateScrollCountDisplay(scrollCountDisplay);
+        content.appendChild(scrollCountDisplay);
 
-        summonBtn.onmouseover = () => {
-            summonBtn.style.transform = 'scale(1.1)';
-            summonBtn.style.boxShadow = '0 8px 30px rgba(255, 215, 0, 0.6)';
-        };
-        summonBtn.onmouseout = () => {
-            summonBtn.style.transform = 'scale(1)';
-            summonBtn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
-        };
+        // Button Container
+        const btnContainer = document.createElement('div');
+        btnContainer.style.display = 'flex';
+        btnContainer.style.gap = '20px';
+        btnContainer.style.marginTop = '25px';
 
-        summonBtn.onclick = () => {
+        // Summon x1 Button
+        this.summonBtnX1 = document.createElement('div');
+        this.summonBtnX1.innerText = "Summon x1";
+        const scrollCount = this.user?.inventory?.['grand_summon'] || 0;
+        this.applyButtonStyle(this.summonBtnX1, scrollCount < 1);
+
+        this.summonBtnX1.onclick = () => {
+            if ((this.user?.inventory?.['grand_summon'] || 0) < 1) {
+                alert("Not enough Grand Summon Scrolls!");
+                return;
+            }
             this.performSummon();
         };
 
-        content.appendChild(summonBtn);
+        btnContainer.appendChild(this.summonBtnX1);
+
+        // Summon x10 Button
+        this.summonBtnX10 = document.createElement('div');
+        this.summonBtnX10.innerText = "Summon x10";
+        this.applyButtonStyle(this.summonBtnX10, scrollCount < 10);
+
+        this.summonBtnX10.onclick = () => {
+            if ((this.user?.inventory?.['grand_summon'] || 0) < 10) {
+                alert("Not enough Grand Summon Scrolls! Need at least 10.");
+                return;
+            }
+            this.performMultiSummon();
+        };
+
+        btnContainer.appendChild(this.summonBtnX10);
+
+        content.appendChild(btnContainer);
 
         // Result Overlay (Hidden initially)
         this.createResultOverlay(content);
+    }
+
+    private applyButtonStyle(btn: HTMLElement, isDisabled: boolean) {
+        btn.style.padding = '15px 40px';
+        btn.style.border = '3px solid #fff';
+        btn.style.borderRadius = '35px';
+        btn.style.fontWeight = 'bold';
+        btn.style.fontSize = '1.2rem';
+        btn.style.transition = 'transform 0.2s, box-shadow 0.2s, filter 0.2s';
+        btn.style.fontFamily = "'SF Pro Rounded', sans-serif";
+
+        if (isDisabled) {
+            btn.style.background = 'linear-gradient(45deg, #666, #444)';
+            btn.style.color = '#888';
+            btn.style.cursor = 'not-allowed';
+            btn.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
+            btn.style.filter = 'grayscale(0.5)';
+            btn.onmouseover = null;
+            btn.onmouseout = null;
+        } else {
+            btn.style.background = 'linear-gradient(45deg, #ffd700, #ffa500)';
+            btn.style.color = '#000';
+            btn.style.cursor = 'pointer';
+            btn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
+            btn.style.filter = 'none';
+            btn.onmouseover = () => {
+                btn.style.transform = 'scale(1.1)';
+                btn.style.boxShadow = '0 8px 30px rgba(255, 215, 0, 0.6)';
+            };
+            btn.onmouseout = () => {
+                btn.style.transform = 'scale(1)';
+                btn.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.4)';
+            };
+        }
+    }
+
+    private updateButtonStates() {
+        // Guard: buttons may not exist yet during initialization
+        if (!this.summonBtnX1 || !this.summonBtnX10) return;
+
+        const scrollCount = this.user?.inventory?.['grand_summon'] || 0;
+        this.applyButtonStyle(this.summonBtnX1, scrollCount < 1);
+        this.applyButtonStyle(this.summonBtnX10, scrollCount < 10);
+    }
+
+    private updateScrollCountDisplay(el?: HTMLElement) {
+        const display = el || this.modal.getContentArea().querySelector('#scroll-count-display') as HTMLElement;
+        if (display && this.user) {
+            const count = this.user.inventory?.['grand_summon'] || 0;
+            display.innerText = `Grand Summon Scrolls: ${count}`;
+        }
+        // Also update button states when scroll count changes
+        this.updateButtonStates();
     }
 
     private createResultOverlay(parent: HTMLElement) {
@@ -113,6 +188,7 @@ export class SummonUI {
         this.resultOverlay.onclick = () => {
             this.resultOverlay.style.display = 'none';
             this.isAnimating = false;
+            this.updateScrollCountDisplay();
         };
         parent.appendChild(this.resultOverlay);
     }
@@ -129,9 +205,9 @@ export class SummonUI {
 
         // Optimistic check (Server handles real check)
         const inventory = this.user.inventory || {};
-        const count = inventory['summon_book'] || 0;
+        const count = inventory['grand_summon'] || 0;
         if (count < 1) {
-            alert("Not enough Summon Books! Check your Backpack.");
+            alert("Not enough Grand Summon Scrolls! Buy more from the Shop.");
             return;
         }
 
@@ -152,7 +228,7 @@ export class SummonUI {
             }
 
             const data = await res.json();
-            const { hero, user } = data; // instanceId available but not needed for display currently
+            const { hero, user } = data;
 
             // Sync local user
             this.user = user;
@@ -160,6 +236,9 @@ export class SummonUI {
             if (this.user && this.onUpdate) {
                 this.onUpdate(this.user);
             }
+
+            // Update scroll count display immediately
+            this.updateScrollCountDisplay();
 
             // Animate Shake
             let startTime = Date.now();
@@ -185,8 +264,67 @@ export class SummonUI {
         }
     }
 
+    private async performMultiSummon() {
+        if (this.isAnimating) return;
+
+        const session = localStorage.getItem('awengers_session');
+        if (session) {
+            this.user = JSON.parse(session);
+        }
+
+        if (!this.user) return;
+
+        const inventory = this.user.inventory || {};
+        const count = inventory['grand_summon'] || 0;
+        if (count < 10) {
+            alert(`Not enough Grand Summon Scrolls! Need 10, have ${count}.`);
+            return;
+        }
+
+        this.isAnimating = true;
+        const summonedHeroes: HeroDef[] = [];
+
+        try {
+            // Perform 10 summons
+            for (let i = 0; i < 10; i++) {
+                const res = await fetch('http://localhost:3000/api/summon', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ commanderName: this.user.commanderName })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.message || "Summon Failed");
+                    this.isAnimating = false;
+                    return;
+                }
+
+                const data = await res.json();
+                summonedHeroes.push(data.hero);
+                this.user = data.user;
+            }
+
+            // Sync local user
+            localStorage.setItem('awengers_session', JSON.stringify(this.user));
+            if (this.user && this.onUpdate) {
+                this.onUpdate(this.user);
+            }
+
+            // Update scroll count display immediately
+            this.updateScrollCountDisplay();
+
+            // Show all heroes
+            this.revealMultipleHeroes(summonedHeroes);
+
+        } catch (e) {
+            console.error("Multi-Summon API Error:", e);
+            alert("Connection Error");
+            this.isAnimating = false;
+        }
+    }
+
     private revealHero(hero: HeroDef) {
-        // const hero = SummonSystem.summon(); // Logic moved to server
         const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : '#4facfe';
 
         this.resultOverlay.innerHTML = '';
@@ -261,11 +399,85 @@ export class SummonUI {
         this.resultOverlay.appendChild(helpText);
 
         this.resultOverlay.style.display = 'flex';
+    }
 
-        // Removed grantHero(hero) - handled by server
-        if (this.user) {
-            // Just sanity check local object structure if needed
-        }
+    private revealMultipleHeroes(heroes: HeroDef[]) {
+        this.resultOverlay.innerHTML = '';
+
+        const style = document.createElement('style');
+        style.innerText = `
+            @keyframes popIn {
+                0% { transform: scale(0); opacity: 0; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        `;
+        this.resultOverlay.appendChild(style);
+
+        const title = document.createElement('div');
+        title.innerText = '🎉 x10 SUMMON RESULTS 🎉';
+        title.style.color = '#ffd700';
+        title.style.fontSize = '1.8rem';
+        title.style.fontWeight = 'bold';
+        title.style.marginBottom = '30px';
+        title.style.fontFamily = "'SF Pro Rounded', sans-serif";
+        title.style.textShadow = '0 2px 10px rgba(255,215,0,0.5)';
+        this.resultOverlay.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+        grid.style.gap = '15px';
+        grid.style.maxWidth = '90%';
+
+        heroes.forEach((hero, index) => {
+            const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : '#4facfe';
+
+            const card = document.createElement('div');
+            card.style.background = 'linear-gradient(135deg, #1a1a2e, #16213e)';
+            card.style.borderRadius = '12px';
+            card.style.border = `3px solid ${glowColor}`;
+            card.style.padding = '15px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.alignItems = 'center';
+            card.style.animation = `popIn 0.5s ease ${index * 0.1}s backwards`;
+
+            const rarityLabel = document.createElement('div');
+            rarityLabel.innerText = hero.rarity;
+            rarityLabel.style.color = glowColor;
+            rarityLabel.style.fontSize = '0.8rem';
+            rarityLabel.style.fontWeight = 'bold';
+            rarityLabel.style.marginBottom = '8px';
+            card.appendChild(rarityLabel);
+
+            const heroIcon = document.createElement('div');
+            heroIcon.innerText = '⭐';
+            heroIcon.style.fontSize = '40px';
+            heroIcon.style.marginBottom = '8px';
+            card.appendChild(heroIcon);
+
+            const nameLabel = document.createElement('div');
+            nameLabel.innerText = hero.name;
+            nameLabel.style.color = 'white';
+            nameLabel.style.fontSize = '0.9rem';
+            nameLabel.style.fontWeight = 'bold';
+            nameLabel.style.textAlign = 'center';
+            nameLabel.style.fontFamily = "'SF Pro Rounded', sans-serif";
+            card.appendChild(nameLabel);
+
+            grid.appendChild(card);
+        });
+
+        this.resultOverlay.appendChild(grid);
+
+        const helpText = document.createElement('div');
+        helpText.innerText = "Tap to Continue";
+        helpText.style.color = '#666';
+        helpText.style.marginTop = '30px';
+        helpText.style.fontSize = '1rem';
+        this.resultOverlay.appendChild(helpText);
+
+        this.resultOverlay.style.display = 'flex';
     }
 
     public getElement(): HTMLElement {

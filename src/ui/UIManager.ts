@@ -1478,7 +1478,19 @@ export class UIManager {
         if (!this.currentUser) return;
         if (this.currentUser.gems >= item.cost) {
             this.currentUser.gems -= item.cost;
-            addPlayerXp(this.currentUser, item.xpAmount);
+
+            // Handle different item types
+            if (item.itemType === 'summon' && item.quantity) {
+                // Add summon scrolls to inventory
+                if (!this.currentUser.inventory) this.currentUser.inventory = {};
+                const itemKey = item.id.startsWith('grand_summon') ? 'grand_summon' : item.id;
+                const currentCount = this.currentUser.inventory[itemKey] || 0;
+                this.currentUser.inventory[itemKey] = currentCount + item.quantity;
+                console.log(`Purchased ${item.quantity} ${itemKey}. New total: ${this.currentUser.inventory[itemKey]}`);
+            } else if (item.xpAmount) {
+                // Add XP
+                addPlayerXp(this.currentUser, item.xpAmount);
+            }
 
             // Visual Updates
             if (this.headerUI) this.headerUI.update(this.currentUser);
@@ -1551,15 +1563,9 @@ export class UIManager {
                     if (startUser._id && !startUser.uid) startUser.uid = startUser._id;
                     this.currentUser = startUser;
 
-                    // Ensure Inventory & Grant Items (100 Summon Books)
+                    // Ensure Inventory exists
                     if (!this.currentUser) return; // Should not happen
                     if (!this.currentUser.inventory) this.currentUser.inventory = {};
-                    // Temporary: Auto-grant 100 Summon Books if missing or less than 100
-                    if (!this.currentUser.inventory['summon_book'] || this.currentUser.inventory['summon_book'] < 100) {
-                        console.log("Granting 100 Summon Books to user...");
-                        this.currentUser.inventory['summon_book'] = 100;
-                        this.syncUser(); // Save back to DB
-                    }
 
                     localStorage.setItem('awengers_session', JSON.stringify(startUser));
 

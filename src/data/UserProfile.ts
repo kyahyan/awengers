@@ -247,9 +247,7 @@ export const MOCK_USER_PROFILE: UserProfile = {
             "Monkey King": 5
         }
     },
-    inventory: {
-        "summon_book": 100
-    },
+    inventory: {},
     uid: "MOCK-ADMIN-001"
 };
 

@@ -101,8 +101,7 @@ export class HeroUpgradeModal {
             z-index: 99998;
             pointer-events: auto;
             cursor: pointer;
-            opacity: 0;
-            animation: fadeIn 0.2s ease forwards;
+            opacity: 1;
             will-change: opacity;
         `;
         this.backdrop.onclick = () => {
@@ -123,8 +122,7 @@ export class HeroUpgradeModal {
             background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 30%, #16213e 70%, #0d0d1a 100%);
             display: flex;
             z-index: 99999;
-            opacity: 0;
-            animation: modalIn 0.25s ease forwards;
+            opacity: 1;
             font-family: 'SF Pro Rounded', sans-serif;
             box-sizing: border-box;
             border-radius: 20px;
@@ -172,6 +170,7 @@ export class HeroUpgradeModal {
                 ? this.user.heroes.get(this.instanceId)
                 : this.user.heroes[this.instanceId];
             heroStars = hData?.stars || 1;
+            console.log('[HeroUpgradeModal] Star data:', { instanceId: this.instanceId, stars: hData?.stars, heroStars, hData });
         }
 
         const isAtCap = this.heroManager.isAtLevelCap();
@@ -203,7 +202,6 @@ export class HeroUpgradeModal {
             display: flex;
             flex-direction: column;
             gap: 10px;
-            animation: slideInLeft 0.4s ease;
             border-right: 1px solid rgba(147, 51, 234, 0.2);
             overflow-y: auto;
         `;
@@ -354,17 +352,35 @@ export class HeroUpgradeModal {
                 actionHandler = () => this.handleLevelUp();
             }
 
-            // Cost Display
+            // Calculate +10 level costs (only for level up mode, not rank up)
+            let totalGold10 = 0;
+            let totalSoul10 = 0;
+            let levelsToMax = 0;
+            if (!isRankUp && !isAtCap) {
+                const maxPossibleLevels = Math.min(10, currentLevelCap - heroLevel);
+                levelsToMax = maxPossibleLevels;
+                for (let i = 0; i < maxPossibleLevels; i++) {
+                    const cost = this.heroManager.getNextLevelCost(heroLevel + i);
+                    totalGold10 += cost.gold;
+                    totalSoul10 += cost.soulPotion;
+                }
+            }
+
+            // Cost Display with potion icons
             const costDiv = document.createElement('div');
+            const goldIconPath = '/assets/potions/coin-icon.png';
+            const soulPotionIconPath = '/assets/potions/soul-potion-icon.png';
+            const heroPotionIconPath = '/assets/potions/hero-potion-icon.png';
+
             costDiv.innerHTML = `
                 <div style="color: #6b7280; font-size: 0.7rem; margin-bottom: 6px;">${isRankUp ? 'PROMOTION COST' : 'NEXT LEVEL COST'}</div>
                 <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="color: #fbbf24;">🪙</span>
+                        <img src="${goldIconPath}" style="width: 28px; height: 28px;" onerror="this.innerText='🪙'" />
                         <span style="color: #fbbf24; font-weight: bold; font-size: 0.9rem;">${costGold.toLocaleString()}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="color: ${isRankUp ? '#a855f7' : '#22c55e'};">${secondResourceIcon}</span>
+                        <img src="${isRankUp ? heroPotionIconPath : soulPotionIconPath}" style="width: 28px; height: 28px;" onerror="this.innerText='🧪'" />
                         <span style="color: ${isRankUp ? '#a855f7' : '#22c55e'}; font-weight: bold; font-size: 0.9rem;">${costSecondResource.toLocaleString()}</span>
                     </div>
                 </div>
@@ -404,6 +420,34 @@ export class HeroUpgradeModal {
             }
 
             upgradeBox.appendChild(btn);
+
+            // +10 LEVEL UP BUTTON (only show if not at cap and can afford)
+            if (!isRankUp && !isAtCap && levelsToMax > 1) {
+                const userSoulPotions = this.user.soulPotion !== undefined ? this.user.soulPotion : (this.user.inventory?.['soul_potion'] || 0);
+                const canAfford10 = userGold >= totalGold10 && userSoulPotions >= totalSoul10;
+
+                if (canAfford10) {
+                    const btn10 = document.createElement('button');
+                    btn10.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>⬆ +${levelsToMax} LEVELS</span>
+                        </div>
+                        <div style="font-size: 0.7rem; opacity: 0.8; margin-top: 2px;">
+                            ${totalGold10.toLocaleString()} Gold • ${totalSoul10.toLocaleString()} Soul
+                        </div>
+                    `;
+                    btn10.style.cssText = `
+                        width: 100%; padding: 10px; font-size: 0.9rem; font-weight: bold;
+                        margin-top: 8px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        border: none; border-radius: 10px; color: #fff; cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(0,0,0, 0.4);
+                    `;
+                    btn10.onclick = () => this.handleBulkLevelUp(levelsToMax);
+                    upgradeBox.appendChild(btn10);
+                }
+            }
+
             leftPanel.appendChild(upgradeBox);
         }
 
@@ -529,7 +573,6 @@ export class HeroUpgradeModal {
             flex-direction: column;
             z-index: 2;
             overflow-y: auto;
-            animation: slideInRight 0.4s ease;
         `;
 
         // TABS
@@ -572,9 +615,11 @@ export class HeroUpgradeModal {
                 // Max Rank or no further evolution needed at this cap
                 rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">Max Evolution Reached for now.</div>`;
             } else {
-                // Not at cap
+                // Not at cap - Find the next star-gated milestone the hero hasn't reached yet
+                const nextStarGatedMilestone = config.rankUpMilestones.find(m => m.starRequirement && heroLevel < m.levelCap);
+                const targetCap = nextStarGatedMilestone?.levelCap || currentLevelCap;
                 rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">
-                    <div>Level up to ${currentLevelCap} to unlock evolution.</div>
+                    <div>Level up to ${targetCap} to unlock evolution.</div>
                  </div>`;
             }
         }
@@ -676,6 +721,47 @@ export class HeroUpgradeModal {
                 } else {
                     alert(data.reason ? `${data.message}: ${data.reason}` : (data.message || 'Level Up Failed'));
                 }
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Network Error');
+        }
+    }
+
+    private async handleBulkLevelUp(levels: number) {
+        try {
+            const commanderName = this.user.commanderName;
+            console.log(`[HeroUpgradeModal] Bulk leveling up ${levels} levels: instanceId=${this.instanceId}`);
+
+            const res = await fetch('http://localhost:3000/api/hero/levelup-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commanderName,
+                    instanceId: this.instanceId,
+                    levels
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Update local user object with server response
+                this.user = data.user;
+                this.onUpdate(data.user);
+
+                // Recreate manager with updated instance data
+                let instanceData;
+                if (this.user.heroes instanceof Map) {
+                    instanceData = this.user.heroes.get(this.instanceId);
+                } else {
+                    instanceData = this.user.heroes[this.instanceId];
+                }
+                this.heroManager = this.recreateManager(data.newLevel, instanceData);
+
+                // Re-render UI with updated state
+                this.renderContent();
+            } else {
+                alert(data.reason ? `${data.message}: ${data.reason}` : (data.message || 'Bulk Level Up Failed'));
             }
         } catch (e) {
             console.error(e);
