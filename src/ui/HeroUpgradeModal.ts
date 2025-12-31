@@ -496,9 +496,9 @@ export class HeroUpgradeModal {
             border: 1px solid rgba(255,255,255,0.1);
         `;
         powerBox.innerHTML = `
-            <img src="/assets/icons/fist.png" style="width: 24px; height: 24px; object-fit: contain;">
+            <img src="/assets/attr/fist.png" style="width: 24px; height: 24px; object-fit: contain;">
             <div>
-                <div style="color: #9ca3af; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;">Hero Power</div>
+                <div style="color: #9ca3af; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;">CP</div>
                 <div style="color: #fbbf24; font-size: 1.2rem; font-weight: 800; line-height: 1;">${heroPower.toLocaleString()}</div>
             </div>
         `;
@@ -1194,16 +1194,37 @@ export class HeroUpgradeModal {
         reqGrid.style.cssText = `display: flex; gap: 10px; justify-content: center; margin-bottom: 40px;`;
 
         // Define merge recipe based on current star level
-        const recipes: Record<number, { reqSameHero: boolean; reqSameAttr: boolean; count: number; starLevel: number }> = {
-            1: { reqSameHero: true, reqSameAttr: false, count: 2, starLevel: 1 },
-            2: { reqSameHero: false, reqSameAttr: true, count: 3, starLevel: 2 },
-            3: { reqSameHero: true, reqSameAttr: false, count: 1, starLevel: 3 },
-            4: { reqSameHero: false, reqSameAttr: true, count: 1, starLevel: 4 },
+        // Each slot can have different requirements
+        type SlotReq = { type: 'sameHero' | 'sameAttr' | 'specificAttr'; attrType?: 'INT' | 'STR' | 'AGI'; starLevel: number };
+        const recipes: Record<number, { slots: SlotReq[] }> = {
+            1: {
+                slots: [
+                    { type: 'sameHero', starLevel: 1 },
+                    { type: 'sameAttr', starLevel: 1 },
+                    { type: 'sameAttr', starLevel: 1 }
+                ]
+            },
+            2: {
+                slots: [
+                    { type: 'sameAttr', starLevel: 2 },
+                    { type: 'sameAttr', starLevel: 2 },
+                    { type: 'sameAttr', starLevel: 2 }
+                ]
+            },
+            3: {
+                slots: [
+                    { type: 'sameHero', starLevel: 3 }
+                ]
+            },
+            4: {
+                slots: [
+                    { type: 'sameAttr', starLevel: 4 }
+                ]
+            },
         };
 
         const recipe = recipes[currentStars];
-        const reqCount = recipe?.count || 0;
-        const reqText = recipe?.reqSameHero ? 'Same Hero' : 'Same Attr';
+        const reqCount = recipe?.slots.length || 0;
 
         // Get main hero data for matching
         let mainHeroData: any;
@@ -1219,8 +1240,17 @@ export class HeroUpgradeModal {
 
         for (let i = 0; i < reqCount; i++) {
             const slotIndex = i;
+            const slotReq = recipe.slots[i];
             const selectedId = this.selectedSacrifices.get(slotIndex);
             const slot = document.createElement('div');
+
+            // Determine slot label based on type
+            let reqText = 'Same Hero';
+            if (slotReq.type === 'sameAttr') {
+                reqText = 'Same Attr';
+            } else if (slotReq.type === 'specificAttr') {
+                reqText = `${slotReq.attrType} Hero`;
+            }
 
             if (selectedId) {
                 // Show selected hero preview
@@ -1269,9 +1299,10 @@ export class HeroUpgradeModal {
                 slot.style.background = selectedId ? 'rgba(34, 197, 94, 0.2)' : 'rgba(0,0,0,0.4)';
             };
             slot.onclick = () => this.showHeroSelectionModal(slotIndex, {
-                sameHero: recipe.reqSameHero,
-                sameAttribute: recipe.reqSameAttr,
-                requiredStars: recipe.starLevel,
+                sameHero: slotReq.type === 'sameHero',
+                sameAttribute: slotReq.type === 'sameAttr',
+                specificAttribute: slotReq.type === 'specificAttr' ? slotReq.attrType : undefined,
+                requiredStars: slotReq.starLevel,
                 mainHeroCodeName,
                 mainHeroAttribute
             });
@@ -1306,6 +1337,7 @@ export class HeroUpgradeModal {
     private showHeroSelectionModal(slotIndex: number, requirements: {
         sameHero: boolean;
         sameAttribute: boolean;
+        specificAttribute?: 'INT' | 'STR' | 'AGI';
         requiredStars: number;
         mainHeroCodeName: string;
         mainHeroAttribute: string;
@@ -1380,6 +1412,15 @@ export class HeroUpgradeModal {
                 }
             }
 
+            // Check specific attribute requirement (e.g., must be INT hero)
+            if (requirements.specificAttribute) {
+                const attr = hero.attribute || 'STR';
+                if (attr !== requirements.specificAttribute) {
+                    console.log(`[HeroSelection] Excluding ${id}: attribute ${attr} !== required ${requirements.specificAttribute}`);
+                    return false;
+                }
+            }
+
             console.log(`[HeroSelection] Including ${id}`);
             return true;
         });
@@ -1408,10 +1449,17 @@ export class HeroUpgradeModal {
         // Header
         const header = document.createElement('div');
         header.style.cssText = `display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);`;
+        // Determine header text based on requirement type
+        let reqLabel = 'Same Hero';
+        if (requirements.sameAttribute) {
+            reqLabel = 'Same Attribute';
+        } else if (requirements.specificAttribute) {
+            reqLabel = `${requirements.specificAttribute} Hero`;
+        }
         header.innerHTML = `
             <div style="color: #fbbf24; font-size: 1.2rem; font-weight: bold;">Select Sacrifice Hero</div>
             <div style="color: #6b7280; font-size: 0.8rem;">
-                ${requirements.sameHero ? 'Same Hero' : 'Same Attribute'} • ${requirements.requiredStars}★
+                ${reqLabel} • ${requirements.requiredStars}★
             </div>
         `;
         modal.appendChild(header);

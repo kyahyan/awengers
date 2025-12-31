@@ -396,9 +396,9 @@ export class GalleryHeroModal {
             z-index: 10;
         `;
         powerBox.innerHTML = `
-            <img src="/assets/attr/fist.png" style="width: 56px; height: 56px; object-fit: contain;" />
+            <img src="/assets/attr/fist.png" style="width: 100px; height: 100px; object-fit: contain;" />
             <div>
-                <div style="color: #6b7280; font-size: 0.6rem; letter-spacing: 1px;">HERO POWER</div>
+                <div style="color: #6b7280; font-size: 0.6rem; letter-spacing: 1px;">Combat Power</div>
                 <div style="color: #fbbf24; font-size: 1.4rem; font-weight: bold;">${heroPower.toLocaleString()}</div>
             </div>
         `;

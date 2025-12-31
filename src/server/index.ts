@@ -643,17 +643,34 @@ app.post('/api/hero/merge', async (req, res) => {
         const mainHero = userAny.heroes.get(mainHeroId);
         const currentStars = mainHero.stars || 1;
 
-        // Define merge recipes
-        const recipes: Record<number, {
-            requireSameHero: boolean;
-            requireSameAttribute: boolean;
-            sacrificeCount: number;
-            sacrificeStarLevel: number;
-        }> = {
-            1: { requireSameHero: true, requireSameAttribute: false, sacrificeCount: 2, sacrificeStarLevel: 1 },  // 1★ → 2★
-            2: { requireSameHero: false, requireSameAttribute: true, sacrificeCount: 3, sacrificeStarLevel: 2 }, // 2★ → 3★
-            3: { requireSameHero: true, requireSameAttribute: false, sacrificeCount: 1, sacrificeStarLevel: 3 },  // 3★ → 4★
-            4: { requireSameHero: false, requireSameAttribute: true, sacrificeCount: 1, sacrificeStarLevel: 4 },  // 4★ → 5★
+        // Define merge recipes with slot-specific requirements
+        // Each slot can have different requirements
+        type SlotReq = { type: 'sameHero' | 'sameAttr' | 'specificAttr'; attrType?: 'INT' | 'STR' | 'AGI'; starLevel: number };
+        const recipes: Record<number, { slots: SlotReq[] }> = {
+            1: {
+                slots: [
+                    { type: 'sameHero', starLevel: 1 },
+                    { type: 'sameAttr', starLevel: 1 },
+                    { type: 'sameAttr', starLevel: 1 }
+                ]
+            },  // 1★ → 2★: 1 Same Hero + 2 Same Attribute Heroes
+            2: {
+                slots: [
+                    { type: 'sameAttr', starLevel: 2 },
+                    { type: 'sameAttr', starLevel: 2 },
+                    { type: 'sameAttr', starLevel: 2 }
+                ]
+            }, // 2★ → 3★
+            3: {
+                slots: [
+                    { type: 'sameHero', starLevel: 3 }
+                ]
+            },  // 3★ → 4★
+            4: {
+                slots: [
+                    { type: 'sameAttr', starLevel: 4 }
+                ]
+            },  // 4★ → 5★
         };
 
         if (currentStars >= 5) {
@@ -666,9 +683,9 @@ app.post('/api/hero/merge', async (req, res) => {
         }
 
         // Validate sacrifice count
-        if (sacrificeIds.length !== recipe.sacrificeCount) {
+        if (sacrificeIds.length !== recipe.slots.length) {
             return res.status(400).json({
-                message: `Recipe requires ${recipe.sacrificeCount} sacrifice(s), got ${sacrificeIds.length}`
+                message: `Recipe requires ${recipe.slots.length} sacrifice(s), got ${sacrificeIds.length}`
             });
         }
 
@@ -694,7 +711,11 @@ app.post('/api/hero/merge', async (req, res) => {
 
         console.log(`[Merge] Main hero: ${mainHeroId}, codeName: ${mainHeroCodeName}, attribute: ${mainHeroAttribute}`);
 
-        for (const sacId of sacrificeIds) {
+        // Validate sacrifices per slot
+        for (let i = 0; i < sacrificeIds.length; i++) {
+            const sacId = sacrificeIds[i];
+            const slotReq = recipe.slots[i];
+
             if (sacId === mainHeroId) {
                 return res.status(400).json({ message: 'Cannot sacrifice the main hero' });
             }
@@ -705,31 +726,34 @@ app.post('/api/hero/merge', async (req, res) => {
             const sacHero = userAny.heroes.get(sacId);
             const sacStars = sacHero.stars || 1;
             const sacHeroCodeName = sacHero.heroCodeName || extractCodeNameFromId(sacId);
+            const sacAttribute = sacHero.attribute || 'STR';
 
-            console.log(`[Merge] Sacrifice: ${sacId}, codeName: ${sacHeroCodeName}, stars: ${sacStars}`);
+            console.log(`[Merge] Slot ${i}: Sacrifice ${sacId}, codeName: ${sacHeroCodeName}, stars: ${sacStars}, attr: ${sacAttribute}`);
 
             // Check star level
-            if (sacStars !== recipe.sacrificeStarLevel) {
+            if (sacStars !== slotReq.starLevel) {
                 return res.status(400).json({
-                    message: `Sacrifice must be ${recipe.sacrificeStarLevel}★, got ${sacStars}★`
+                    message: `Slot ${i + 1}: Sacrifice must be ${slotReq.starLevel}★, got ${sacStars}★`
                 });
             }
 
-            // Check same hero requirement (case-insensitive)
-            if (recipe.requireSameHero) {
+            // Check requirement based on slot type
+            if (slotReq.type === 'sameHero') {
                 if (sacHeroCodeName.toLowerCase() !== mainHeroCodeName.toLowerCase()) {
                     return res.status(400).json({
-                        message: `Sacrifice must be the same hero (${mainHeroCodeName})`
+                        message: `Slot ${i + 1}: Sacrifice must be the same hero (${mainHeroCodeName})`
                     });
                 }
-            }
-
-            // Check same attribute requirement
-            if (recipe.requireSameAttribute) {
-                const sacAttribute = sacHero.attribute || 'STR';
+            } else if (slotReq.type === 'sameAttr') {
                 if (sacAttribute !== mainHeroAttribute) {
                     return res.status(400).json({
-                        message: `Sacrifice must have same attribute (${mainHeroAttribute})`
+                        message: `Slot ${i + 1}: Sacrifice must have same attribute (${mainHeroAttribute})`
+                    });
+                }
+            } else if (slotReq.type === 'specificAttr') {
+                if (sacAttribute !== slotReq.attrType) {
+                    return res.status(400).json({
+                        message: `Slot ${i + 1}: Sacrifice must be ${slotReq.attrType} hero, got ${sacAttribute}`
                     });
                 }
             }
