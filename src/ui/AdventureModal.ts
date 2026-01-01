@@ -1,4 +1,5 @@
-import { JADE_LOTUS_SHRINE_STAGES, StageDefinition } from '../data/AdventureData';
+import { JADE_LOTUS_SHRINE_STAGES, StageDefinition, getStageEnemyIcons, getStageMainEnemy } from '../data/AdventureData';
+import { BattleArenaUI } from './BattleArenaUI';
 
 export class AdventureModal {
     private container: HTMLElement;
@@ -38,6 +39,31 @@ export class AdventureModal {
             }
             this.onClose();
         }, 300);
+    }
+
+    private startBattle(stage: StageDefinition) {
+        const enemy = getStageMainEnemy(stage);
+        if (!enemy) {
+            console.error('[Adventure] No enemy found for stage:', stage.id);
+            return;
+        }
+
+        console.log(`[Adventure] Starting battle with ${enemy.displayName} (Level ${stage.recommendedLevel})`);
+
+        // Close the adventure modal
+        this.close();
+
+        // Create battle UI with enemy data
+        setTimeout(() => {
+            const enemyId = stage.enemyIds[0] || 'treant';
+            const battleUI = new BattleArenaUI(
+                'Antelope Mage',
+                () => console.log('[Adventure] Battle ended'),
+                enemyId,
+                stage.recommendedLevel
+            );
+            document.body.appendChild(battleUI.getElement());
+        }, 350);
     }
 
     private render() {
@@ -210,6 +236,7 @@ export class AdventureModal {
                     border-radius: 4px;
                     border: 1px solid #555;
                     background: #222;
+                    object-fit: cover;
                 }
 
                 .battle-btn {
@@ -257,8 +284,9 @@ export class AdventureModal {
                 const row = document.createElement('div');
                 row.className = 'stage-row';
 
-                // Enemy HTML
-                const enemiesHtml = stage.enemies.map(src => `<img src="${src}" class="enemy-icon" onerror="this.style.display='none'"/>`).join('');
+                // Get enemy icons using the helper function
+                const enemyIcons = getStageEnemyIcons(stage);
+                const enemiesHtml = enemyIcons.map(src => `<img src="${src}" class="enemy-icon" onerror="this.style.display='none'"/>`).join('');
 
                 row.innerHTML = `
                     <div class="stage-info">
@@ -278,9 +306,7 @@ export class AdventureModal {
                 if (btn) {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        console.log(`[Adventure] Starting Battle for Stage ${stage.id}`);
-                        // Placeholder action
-                        alert(`Starting Battle: ${stage.name}`);
+                        this.startBattle(stage);
                     });
                 }
 
@@ -294,3 +320,4 @@ export class AdventureModal {
         });
     }
 }
+

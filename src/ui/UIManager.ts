@@ -1142,13 +1142,608 @@ export class UIManager {
 
                     galleryContent.appendChild(heroGrid);
                     contentArea.appendChild(galleryContent);
+                } else if (tabName === 'Deployment') {
+                    // Deployment Tab: Team deployment management
+                    const deployContent = document.createElement('div');
+                    deployContent.style.cssText = `
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        height: 100%;
+                        padding: 20px 40px 20px 40px;
+                        margin-top: 100px;
+                        overflow-y: auto;
+                    `;
+
+                    // Track selected heroes for deployment
+                    const selectedForDeploy: Map<number, { instanceId: string, heroName: string }> = new Map();
+                    const slotElements: HTMLElement[] = [];
+
+                    // Load saved team from database
+                    const savedTeam = (this.currentUser as any)?.deployedTeam || [];
+                    const userHeroes = (this.currentUser as any)?.heroes || {};
+                    const heroEntries = userHeroes instanceof Map
+                        ? Array.from(userHeroes.entries())
+                        : Object.entries(userHeroes);
+
+                    savedTeam.forEach((instanceId: string, index: number) => {
+                        if (index >= 6) return; // Max 6 slots
+
+                        // Find the hero data for this instanceId
+                        const heroEntry = heroEntries.find(([id]: [string, any]) => id === instanceId);
+                        if (heroEntry) {
+                            const heroData = heroEntry[1] as any;
+                            let heroName = heroData.heroCodeName;
+                            if (!heroName) {
+                                heroName = instanceId.includes('_') ? instanceId.split('_')[0] : instanceId;
+                            }
+                            heroName = heroName.charAt(0).toUpperCase() + heroName.slice(1);
+
+                            selectedForDeploy.set(index, { instanceId, heroName });
+                        }
+                    });
+
+                    // Title Row
+                    const titleRow = document.createElement('div');
+                    titleRow.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                        margin-bottom: 20px;
+                    `;
+                    const icon = document.createElement('div');
+                    icon.innerText = '⚔️';
+                    icon.style.fontSize = '32px';
+                    titleRow.appendChild(icon);
+
+                    const title = document.createElement('div');
+                    title.innerText = 'TEAM DEPLOYMENT';
+                    title.style.cssText = `
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        color: #5c3d25;
+                        font-family: 'SF Pro Rounded', sans-serif;
+                    `;
+                    titleRow.appendChild(title);
+                    deployContent.appendChild(titleRow);
+
+                    // Team Slots Container
+                    const teamContainer = document.createElement('div');
+                    teamContainer.style.cssText = `
+                        display: grid;
+                        grid-template-columns: repeat(6, 1fr);
+                        gap: 15px;
+                        width: 95%;
+                        max-width: 900px;
+                        margin-bottom: 15px;
+                    `;
+
+                    // Function to update a slot's display
+                    const updateSlot = (slotIndex: number) => {
+                        const slot = slotElements[slotIndex];
+                        if (!slot) return;
+
+                        const heroData = selectedForDeploy.get(slotIndex);
+                        if (heroData) {
+                            // Find the hero asset for this hero
+                            const asset = HERO_ASSETS.find(a => a.name === heroData.heroName);
+                            slot.innerHTML = '';
+                            slot.style.border = '3px solid #ffd700';
+
+                            if (asset && asset.sprite2D) {
+                                const displaySize = 120;
+                                const framesPerRow = asset.sprite2D.framesPerRow;
+                                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
+                                const scaledSheetWidth = framesPerRow * displaySize;
+                                const scaledSheetHeight = totalRows * displaySize;
+
+                                const spritePreview = document.createElement('div');
+                                spritePreview.style.cssText = `
+                                    width: ${displaySize}px;
+                                    height: ${displaySize}px;
+                                    background-image: url('${asset.sprite2D.spritesheetPath}');
+                                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
+                                    background-position: 0 0;
+                                    background-repeat: no-repeat;
+                                    transform: scale(2.5) translateY(15%);
+                                    transform-origin: center center;
+                                `;
+                                slot.appendChild(spritePreview);
+                            }
+
+                            // Remove button
+                            const removeBtn = document.createElement('div');
+                            removeBtn.innerText = '✕';
+                            removeBtn.style.cssText = `
+                                position: absolute;
+                                top: 5px;
+                                right: 5px;
+                                width: 24px;
+                                height: 24px;
+                                background: #dc2626;
+                                border-radius: 50%;
+                                color: white;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 14px;
+                                cursor: pointer;
+                                z-index: 10;
+                            `;
+                            removeBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                selectedForDeploy.delete(slotIndex);
+                                updateSlot(slotIndex);
+                                updateDeployButton();
+                                renderHeroGrid();
+                            };
+                            slot.appendChild(removeBtn);
+                            slot.style.position = 'relative';
+                        } else {
+                            slot.innerHTML = '';
+                            slot.style.border = '3px dashed #8b6542';
+
+                            const slotIcon = document.createElement('div');
+                            slotIcon.innerText = '+';
+                            slotIcon.style.cssText = `
+                                font-size: 2.5rem;
+                                color: #8b6542;
+                                margin-bottom: 5px;
+                            `;
+                            slot.appendChild(slotIcon);
+
+                            const slotLabel = document.createElement('div');
+                            slotLabel.innerText = `Slot ${slotIndex + 1}`;
+                            slotLabel.style.cssText = `
+                                color: #a07850;
+                                font-size: 0.85rem;
+                                font-family: 'SF Pro Rounded', sans-serif;
+                                font-weight: 600;
+                            `;
+                            slot.appendChild(slotLabel);
+                        }
+                    };
+
+                    // Function to update deploy button state
+                    const updateDeployButton = () => {
+                        const count = selectedForDeploy.size;
+                        if (count > 0) {
+                            deployBtn.style.opacity = '1';
+                            deployBtn.style.cursor = 'pointer';
+                            deployBtn.innerText = `🚀 DEPLOY TEAM (${count}/6)`;
+                        } else {
+                            deployBtn.style.opacity = '0.5';
+                            deployBtn.style.cursor = 'not-allowed';
+                            deployBtn.innerText = '🚀 DEPLOY TEAM';
+                        }
+                    };
+
+                    // Create 6 team slots
+                    for (let i = 0; i < 6; i++) {
+                        const slot = document.createElement('div');
+                        slot.style.cssText = `
+                            background: linear-gradient(135deg, #2b1d12 0%, #4a3222 100%);
+                            border: 3px dashed #8b6542;
+                            border-radius: 12px;
+                            height: 140px;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            overflow: hidden;
+                            position: relative;
+                        `;
+                        slot.onmouseenter = () => {
+                            if (!selectedForDeploy.has(i)) {
+                                slot.style.borderColor = '#ffd700';
+                                slot.style.background = 'linear-gradient(135deg, #3d2815 0%, #5c3828 100%)';
+                            }
+                        };
+                        slot.onmouseleave = () => {
+                            if (!selectedForDeploy.has(i)) {
+                                slot.style.borderColor = '#8b6542';
+                                slot.style.background = 'linear-gradient(135deg, #2b1d12 0%, #4a3222 100%)';
+                            }
+                        };
+
+                        slotElements.push(slot);
+                        updateSlot(i);
+                        teamContainer.appendChild(slot);
+                    }
+                    deployContent.appendChild(teamContainer);
+
+                    // Deploy Button
+                    const deployBtn = document.createElement('button');
+                    deployBtn.innerText = '🚀 DEPLOY TEAM';
+                    deployBtn.style.cssText = `
+                        padding: 12px 40px;
+                        font-size: 1.1rem;
+                        font-weight: bold;
+                        font-family: 'SF Pro Rounded', sans-serif;
+                        background: linear-gradient(180deg, #4a7c3f 0%, #2d5a26 100%);
+                        border: 3px solid #6b9e5a;
+                        border-radius: 30px;
+                        color: white;
+                        cursor: not-allowed;
+                        opacity: 0.5;
+                        transition: all 0.2s ease;
+                        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                        margin-bottom: 15px;
+                    `;
+                    deployBtn.onclick = async () => {
+                        if (selectedForDeploy.size > 0) {
+                            const team = Array.from(selectedForDeploy.values());
+                            const teamInstanceIds = team.map(h => h.instanceId);
+
+                            // Update button to show saving state
+                            deployBtn.innerText = '💾 SAVING...';
+                            deployBtn.style.opacity = '0.7';
+
+                            try {
+                                const response = await fetch('http://localhost:3000/api/team/deploy', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        commanderName: this.currentUser?.commanderName,
+                                        teamInstanceIds
+                                    })
+                                });
+
+                                const data = await response.json();
+                                if (data.success) {
+                                    console.log('[Deployment] Team saved to database:', teamInstanceIds);
+                                    // Update local user profile with new deployedTeam
+                                    if (this.currentUser) {
+                                        (this.currentUser as any).deployedTeam = teamInstanceIds;
+                                    }
+                                    deployBtn.innerText = '✅ TEAM SAVED!';
+                                    deployBtn.style.background = 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)';
+                                    setTimeout(() => {
+                                        updateDeployButton();
+                                        deployBtn.style.background = 'linear-gradient(180deg, #4a7c3f 0%, #2d5a26 100%)';
+                                    }, 1500);
+                                } else {
+                                    throw new Error(data.message || 'Save failed');
+                                }
+                            } catch (error) {
+                                console.error('[Deployment] Save error:', error);
+                                deployBtn.innerText = '❌ SAVE FAILED';
+                                deployBtn.style.background = 'linear-gradient(180deg, #dc2626 0%, #b91c1c 100%)';
+                                setTimeout(() => {
+                                    updateDeployButton();
+                                    deployBtn.style.background = 'linear-gradient(180deg, #4a7c3f 0%, #2d5a26 100%)';
+                                }, 1500);
+                            }
+                        }
+                    };
+                    deployContent.appendChild(deployBtn);
+
+                    // Initialize button state with loaded team
+                    updateDeployButton();
+
+                    // Attribute filter state
+                    let currentAttrFilter: 'All' | 'STR' | 'AGI' | 'INT' = 'All';
+
+                    // Hero selection area with filter
+                    const selectSection = document.createElement('div');
+                    selectSection.style.cssText = `
+                        width: 65%;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
+                    `;
+
+                    // Filter row
+                    const filterRow = document.createElement('div');
+                    filterRow.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        width: 100%;
+                    `;
+
+                    const selectLabel = document.createElement('div');
+                    selectLabel.innerText = 'SELECT HEROES';
+                    selectLabel.style.cssText = `
+                        color: #5c3d25;
+                        font-size: 1rem;
+                        font-weight: bold;
+                        font-family: 'SF Pro Rounded', sans-serif;
+                    `;
+                    filterRow.appendChild(selectLabel);
+
+                    // Filter buttons
+                    const filterBtns = document.createElement('div');
+                    filterBtns.style.cssText = `display: flex; gap: 6px; margin-left: auto;`;
+
+                    const attrFilters = [
+                        { name: 'All', icon: '🔄', color: '#8b6542' },
+                        { name: 'STR', icon: '💪', color: '#dc2626' },
+                        { name: 'AGI', icon: '🏃', color: '#16a34a' },
+                        { name: 'INT', icon: '🧠', color: '#2563eb' }
+                    ];
+
+                    const filterElements: HTMLElement[] = [];
+                    const updateFilterStyles = () => {
+                        filterElements.forEach((btn, idx) => {
+                            const filter = attrFilters[idx];
+                            const isActive = currentAttrFilter === filter.name;
+                            btn.style.background = isActive
+                                ? `linear-gradient(180deg, ${filter.color}cc 0%, ${filter.color}99 100%)`
+                                : 'linear-gradient(180deg, #8b6542 0%, #5c3d25 100%)';
+                            btn.style.borderColor = isActive ? filter.color : '#3d2815';
+                            btn.style.boxShadow = isActive ? `0 0 8px ${filter.color}66` : 'none';
+                        });
+                    };
+
+                    attrFilters.forEach(attr => {
+                        const btn = document.createElement('button');
+                        btn.innerHTML = `${attr.icon} ${attr.name}`;
+                        btn.style.cssText = `
+                            display: flex; align-items: center; gap: 4px;
+                            background: linear-gradient(180deg, #8b6542 0%, #5c3d25 100%);
+                            color: #fff;
+                            border: 2px solid #3d2815;
+                            padding: 6px 12px;
+                            border-radius: 15px;
+                            cursor: pointer;
+                            font-family: 'SF Pro Rounded', sans-serif;
+                            font-size: 0.75rem;
+                            font-weight: 600;
+                            transition: all 0.2s ease;
+                        `;
+                        btn.onclick = () => {
+                            currentAttrFilter = attr.name as any;
+                            updateFilterStyles();
+                            renderHeroGrid();
+                        };
+                        filterElements.push(btn);
+                        filterBtns.appendChild(btn);
+                    });
+                    updateFilterStyles();
+                    filterRow.appendChild(filterBtns);
+                    selectSection.appendChild(filterRow);
+
+                    // Hero Grid Container (scrollable horizontally)
+                    const heroGridContainer = document.createElement('div');
+                    heroGridContainer.style.cssText = `
+                        width: 100%;
+                        background: linear-gradient(135deg, #3d2815 0%, #5c3d25 100%);
+                        border: 3px solid #8b6542;
+                        border-radius: 15px;
+                        padding: 15px;
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                        position: relative;
+                    `;
+
+                    // Right fade overlay
+                    const fadeOverlay = document.createElement('div');
+                    fadeOverlay.style.cssText = `
+                        position: absolute;
+                        top: 0;
+                        right: 0;
+                        width: 80px;
+                        height: 100%;
+                        background: linear-gradient(to right, transparent, #4a3222);
+                        pointer-events: none;
+                        z-index: 5;
+                        border-radius: 0 12px 12px 0;
+                    `;
+                    heroGridContainer.appendChild(fadeOverlay);
+
+                    const heroGrid = document.createElement('div');
+                    heroGrid.style.cssText = `
+                        display: grid;
+                        grid-template-rows: repeat(3, 1fr);
+                        grid-auto-flow: column;
+                        gap: 10px;
+                        min-width: min-content;
+                        padding-right: 60px;
+                    `;
+
+                    // Function to render hero grid
+                    const renderHeroGrid = () => {
+                        heroGrid.innerHTML = '';
+
+                        // Get user's heroes
+                        const userHeroes = this.currentUser?.heroes || {};
+                        const entries = userHeroes instanceof Map
+                            ? Array.from(userHeroes.entries())
+                            : Object.entries(userHeroes);
+
+                        if (entries.length === 0) {
+                            const emptyMsg = document.createElement('div');
+                            emptyMsg.innerText = 'No heroes available. Summon some heroes first!';
+                            emptyMsg.style.cssText = `
+                                color: #a07850;
+                                font-size: 1rem;
+                                padding: 20px;
+                                font-family: 'SF Pro Rounded', sans-serif;
+                            `;
+                            heroGrid.appendChild(emptyMsg);
+                            return;
+                        }
+
+                        // Check if hero is already selected
+                        const isHeroSelected = (instanceId: string) => {
+                            for (const [_, data] of selectedForDeploy) {
+                                if (data.instanceId === instanceId) return true;
+                            }
+                            return false;
+                        };
+
+                        entries.forEach(([instanceId, heroData]: [string, any]) => {
+                            // Get hero attribute for filtering
+                            const heroAttr = heroData.attribute || 'STR';
+
+                            // Apply attribute filter
+                            if (currentAttrFilter !== 'All' && heroAttr !== currentAttrFilter) {
+                                return;
+                            }
+
+                            // Get hero name
+                            let heroName = heroData.heroCodeName;
+                            if (!heroName) {
+                                heroName = instanceId.includes('_') ? instanceId.split('_')[0] : instanceId;
+                            }
+                            // Capitalize first letter
+                            heroName = heroName.charAt(0).toUpperCase() + heroName.slice(1);
+
+                            const asset = HERO_ASSETS.find(a => a.name.toLowerCase() === heroName.toLowerCase());
+                            if (!asset) return;
+
+                            const isSelected = isHeroSelected(instanceId);
+                            const stars = heroData.stars || 1;
+                            const level = heroData.level || 1;
+
+                            const card = document.createElement('div');
+                            card.style.cssText = `
+                                width: 100px;
+                                height: 130px;
+                                background: ${isSelected ? 'linear-gradient(135deg, #1a4d1a 0%, #2d5a26 100%)' : 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'};
+                                border: 3px solid ${isSelected ? '#4ade80' : '#8b6542'};
+                                border-radius: 10px;
+                                position: relative;
+                                cursor: pointer;
+                                transition: all 0.15s ease;
+                                flex-shrink: 0;
+                                overflow: hidden;
+                            `;
+
+                            card.onmouseenter = () => {
+                                card.style.transform = 'scale(1.05)';
+                                card.style.borderColor = isSelected ? '#4ade80' : '#ffd700';
+                            };
+                            card.onmouseleave = () => {
+                                card.style.transform = 'scale(1)';
+                                card.style.borderColor = isSelected ? '#4ade80' : '#8b6542';
+                            };
+
+                            card.onclick = () => {
+                                if (isSelected) {
+                                    // Remove from deployment
+                                    for (const [slotIndex, data] of selectedForDeploy) {
+                                        if (data.instanceId === instanceId) {
+                                            selectedForDeploy.delete(slotIndex);
+                                            updateSlot(slotIndex);
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    // Add to first empty slot
+                                    if (selectedForDeploy.size >= 6) {
+                                        return; // Team is full
+                                    }
+                                    for (let i = 0; i < 6; i++) {
+                                        if (!selectedForDeploy.has(i)) {
+                                            selectedForDeploy.set(i, { instanceId, heroName: asset.name });
+                                            updateSlot(i);
+                                            break;
+                                        }
+                                    }
+                                }
+                                updateDeployButton();
+                                renderHeroGrid();
+                            };
+
+                            // Sprite preview
+                            if (asset.sprite2D) {
+                                const displaySize = 100;
+                                const framesPerRow = asset.sprite2D.framesPerRow;
+                                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
+                                const scaledSheetWidth = framesPerRow * displaySize;
+                                const scaledSheetHeight = totalRows * displaySize;
+
+                                const spritePreview = document.createElement('div');
+                                spritePreview.style.cssText = `
+                                    width: ${displaySize}px;
+                                    height: ${displaySize}px;
+                                    background-image: url('${asset.sprite2D.spritesheetPath}');
+                                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
+                                    background-position: 0 0;
+                                    background-repeat: no-repeat;
+                                    transform: scale(2.8) translateY(18%);
+                                    transform-origin: center center;
+                                `;
+                                card.appendChild(spritePreview);
+                            }
+
+                            // Stars at bottom
+                            const starsContainer = document.createElement('div');
+                            starsContainer.style.cssText = `
+                                position: absolute;
+                                bottom: 2px;
+                                width: 100%;
+                                text-align: center;
+                                font-size: 1rem;
+                                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                            `;
+                            let starsHtml = '';
+                            for (let s = 0; s < stars; s++) {
+                                starsHtml += '⭐';
+                            }
+                            starsContainer.innerHTML = starsHtml;
+                            card.appendChild(starsContainer);
+
+                            // Level badge
+                            const levelBadge = document.createElement('div');
+                            levelBadge.innerText = String(level);
+                            levelBadge.style.cssText = `
+                                position: absolute;
+                                top: 3px;
+                                right: 5px;
+                                color: white;
+                                font-size: 0.85rem;
+                                font-weight: bold;
+                                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                                font-family: 'SF Pro Rounded', sans-serif;
+                            `;
+                            card.appendChild(levelBadge);
+
+                            // Selection checkmark
+                            if (isSelected) {
+                                const checkmark = document.createElement('div');
+                                checkmark.innerText = '✓';
+                                checkmark.style.cssText = `
+                                    position: absolute;
+                                    top: 3px;
+                                    left: 5px;
+                                    width: 22px;
+                                    height: 22px;
+                                    background: #4ade80;
+                                    border-radius: 50%;
+                                    color: white;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 14px;
+                                    font-weight: bold;
+                                `;
+                                card.appendChild(checkmark);
+                            }
+
+                            heroGrid.appendChild(card);
+                        });
+                    };
+
+                    renderHeroGrid();
+                    heroGridContainer.appendChild(heroGrid);
+                    selectSection.appendChild(heroGridContainer);
+                    deployContent.appendChild(selectSection);
+
+                    contentArea.appendChild(deployContent);
                 }
             };
 
             // Function to update tab styles
             const updateTabStyles = () => {
                 tabElements.forEach((tab, index) => {
-                    const tabName = ['Heroes', 'Shards', 'Gallery'][index];
+                    const tabName = ['Heroes', 'Shards', 'Gallery', 'Deployment'][index];
                     if (tabName === activeTab) {
                         tab.style.background = 'linear-gradient(180deg, #a07850 0%, #6b4830 100%)';
                         tab.style.color = '#fff';
@@ -1177,7 +1772,7 @@ export class UIManager {
                 pointer-events: auto;
             `;
 
-            const tabs = ['Heroes', 'Shards', 'Gallery'];
+            const tabs = ['Heroes', 'Shards', 'Gallery', 'Deployment'];
             tabs.forEach(tabName => {
                 const tab = document.createElement('div');
                 tab.innerText = tabName;

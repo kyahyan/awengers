@@ -928,6 +928,49 @@ app.post('/api/hero/equip', async (req, res) => {
     }
 });
 
+// SAVE DEPLOYED TEAM Endpoint
+app.post('/api/team/deploy', async (req, res) => {
+    try {
+        const { commanderName, teamInstanceIds } = req.body;
+        if (!commanderName || !Array.isArray(teamInstanceIds)) {
+            return res.status(400).json({ message: 'commanderName and teamInstanceIds[] required' });
+        }
+
+        // Validate max 6 heroes
+        if (teamInstanceIds.length > 6) {
+            return res.status(400).json({ message: 'Maximum 6 heroes in a team' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+
+        // Validate all instanceIds exist in user's heroes
+        for (const instanceId of teamInstanceIds) {
+            if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+                return res.status(400).json({ message: `Hero instance not found: ${instanceId}` });
+            }
+        }
+
+        // Save the deployed team
+        userAny.deployedTeam = teamInstanceIds;
+        user.markModified('deployedTeam');
+        await user.save();
+
+        console.log(`[Deploy] ${commanderName} saved team: ${teamInstanceIds.join(', ')}`);
+        res.json({
+            success: true,
+            deployedTeam: teamInstanceIds,
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Deploy Team Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

@@ -1,10 +1,16 @@
 import { HERO_ASSETS, HeroSpriteConfig } from '../data/HeroAssetsMap';
+import { EnemyDefinition, getEnemyById, getEnemyStatsForLevel } from '../data/EnemyDefinitions';
 
 const FPS = 30;
 const MAX_AP = 10000;
 
 const ANIM_FRAMES: Record<string, number> = {
     idle: 48, skill1: 24, skill2: 30, hit1: 15, dead: 40, dizzy: 40
+};
+
+// Enemy animation mapping
+const ENEMY_ANIM_MAP: Record<string, string> = {
+    idle: 'idle', skill1: 'attack', skill2: 'attack', hit1: 'hit', dead: 'dead', dizzy: 'hit'
 };
 
 // Map file assets to new Hero IDs
@@ -126,6 +132,8 @@ export class BattleArenaUI {
     private arenaScreen: HTMLElement | null = null;
     private onClose: () => void;
     private heroAssetName: string;
+    private enemyId: string;
+    private stageLevel: number;
 
     private hero: BattleEntity | null = null;
     private enemy: BattleEntity | null = null;
@@ -151,8 +159,10 @@ export class BattleArenaUI {
         'Ranger': 'Antelope Ranger'
     };
 
-    constructor(heroAssetName: string, onClose: () => void) {
+    constructor(heroAssetName: string, onClose: () => void, enemyId: string = 'treant', stageLevel: number = 10) {
         this.heroAssetName = BattleArenaUI.NAME_ALIASES[heroAssetName] || heroAssetName;
+        this.enemyId = enemyId;
+        this.stageLevel = stageLevel;
         this.onClose = onClose;
         this.container = document.createElement('div');
         this.container.style.cssText = `position: fixed; inset: 0; width: 100%; height: 100%; z-index: 100000; background: #000;`;
@@ -225,19 +235,33 @@ export class BattleArenaUI {
         };
 
         const heroConfigLeft = HERO_ASSETS.find(h => h.name === `${this.heroAssetName} Left`);
-        const enemyName = this.heroAssetName === 'Antelope Mage' ? 'Antelope Ranger' : 'Antelope Mage';
-        const configRight = HERO_ASSETS.find(h => h.name === enemyName);
 
-        if (heroConfigLeft?.sprite2D && configRight?.sprite2D) {
+        // Get enemy from definitions
+        const enemyDef = getEnemyById(this.enemyId);
+
+        if (heroConfigLeft?.sprite2D) {
             this.hero = this.createBattleEntity('hero', this.heroAssetName, '250', '#22c55e', heroConfigLeft.sprite2D);
             Object.assign(this.hero.element.style, { position: 'absolute', bottom: '25%', left: '25%' });
             battleContainer.appendChild(this.hero.element);
             this.playAnim(this.hero, 'idle');
 
-            this.enemy = this.createBattleEntity('enemy', enemyName, '250', '#ef4444', configRight.sprite2D);
-            Object.assign(this.enemy.element.style, { position: 'absolute', top: '35%', right: '25%' });
-            battleContainer.appendChild(this.enemy.element);
-            this.playAnim(this.enemy, 'idle');
+            // Create enemy entity from enemy definition
+            if (enemyDef) {
+                this.enemy = this.createEnemyEntity(enemyDef, this.stageLevel);
+            } else {
+                // Fallback to hero as enemy
+                const enemyName = this.heroAssetName === 'Antelope Mage' ? 'Antelope Ranger' : 'Antelope Mage';
+                const configRight = HERO_ASSETS.find(h => h.name === enemyName);
+                if (configRight?.sprite2D) {
+                    this.enemy = this.createBattleEntity('enemy', enemyName, String(this.stageLevel), '#ef4444', configRight.sprite2D);
+                }
+            }
+
+            if (this.enemy) {
+                Object.assign(this.enemy.element.style, { position: 'absolute', top: '35%', right: '25%' });
+                battleContainer.appendChild(this.enemy.element);
+                this.playEnemyAnim(this.enemy, 'idle');
+            }
 
             this.createHUD(battleContainer);
             this.createBattleLog(battleContainer);
@@ -651,6 +675,14 @@ export class BattleArenaUI {
 
     private playAnim(entity: BattleEntity, type: string, loop: boolean = true, onComplete?: () => void) {
         if (entity.isDead && type !== 'dead') return;
+
+        // Check if this is an enemy entity with enemyDef
+        const enemyDef = (entity.element as any).enemyDef;
+        if (enemyDef) {
+            this.playEnemyAnim(entity, type, loop, onComplete);
+            return;
+        }
+
         if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
         entity.currentAnim = type;
         const newPath = entity.baseConfig.spritesheetPath.replace('idle', type);
@@ -758,6 +790,178 @@ export class BattleArenaUI {
             skillIcons: data.skillIcons, stats: stats, ap: 0, effects: [], passiveCharges: 0, heroId, isMelee
         };
     }
+
+    private createEnemyEntity(enemyDef: EnemyDefinition, level: number): BattleEntity {
+        const stats = getEnemyStatsForLevel(enemyDef, level);
+        const name = enemyDef.displayName;
+        const color = enemyDef.type === 'boss' ? '#ff0000' : enemyDef.type === 'elite' ? '#fbbf24' : '#ef4444';
+        const isMelee = true; // Treant is melee
+
+        const container = document.createElement('div');
+        container.style.cssText = `display: flex; flex-direction: column; align-items: center; position: relative; z-index: 10;`;
+
+        const overheadUI = document.createElement('div');
+        overheadUI.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: -110px; z-index: 20; pointer-events: none; padding-bottom: 20px;`;
+
+        const levelText = document.createElement('div');
+        levelText.innerText = String(level);
+        levelText.style.cssText = `color: #fff; font-size: 1.2rem; font-weight: 900; line-height: 1; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; font-family: 'SF Pro Display';`;
+        overheadUI.appendChild(levelText);
+
+        // Enemy type badge
+        if (enemyDef.type !== 'normal') {
+            const badge = document.createElement('div');
+            badge.innerText = enemyDef.type === 'boss' ? '💀' : '⚔️';
+            badge.style.cssText = `font-size: 1.5rem;`;
+            overheadUI.appendChild(badge);
+        }
+
+        const barsContainer = document.createElement('div');
+        barsContainer.style.cssText = `display: flex; flex-direction: column; gap: 2px; position:relative;`;
+
+        const statusContainer = document.createElement('div');
+        statusContainer.style.cssText = `position: absolute; bottom: 100%; left: 0; width: 100%; display: flex; gap: 2px; margin-bottom: 2px;`;
+        barsContainer.appendChild(statusContainer);
+
+        const hpBarTrack = document.createElement('div');
+        hpBarTrack.style.cssText = `width: 120px; height: 12px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
+        const hpBarFill = document.createElement('div');
+        hpBarFill.style.cssText = `width: 100%; height: 100%; background: ${color}; transition: width 0.2s ease-out;`;
+        hpBarTrack.appendChild(hpBarFill);
+        barsContainer.appendChild(hpBarTrack);
+
+        const apBarTrack = document.createElement('div');
+        apBarTrack.style.cssText = `width: 120px; height: 6px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
+        const apBarFill = document.createElement('div');
+        apBarFill.style.cssText = `width: 0%; height: 100%; background: #fbbf24; transition: width 0.1s linear;`;
+        apBarTrack.appendChild(apBarFill);
+        barsContainer.appendChild(apBarTrack);
+
+        overheadUI.appendChild(barsContainer);
+        container.appendChild(overheadUI);
+
+        // Create enemy sprite
+        const spriteSize = enemyDef.sprite.frameSize || 512;
+        const framesPerRow = enemyDef.sprite.animations.idle.framesPerRow || 8;
+        const idleAnim = enemyDef.sprite.animations.idle;
+        const spritePath = `${enemyDef.sprite.basePath}${idleAnim.file}`;
+
+        const sprite = document.createElement('div');
+        sprite.style.cssText = `
+            width: ${spriteSize}px; 
+            height: ${spriteSize}px; 
+            background-image: url('${spritePath}');
+            background-size: ${framesPerRow * spriteSize}px auto; 
+            background-repeat: no-repeat; 
+            background-position: 0 0; 
+            image-rendering: auto; 
+            filter: drop-shadow(0 0 30px ${color}40);
+            transform: scaleX(-1);
+        `;
+        container.appendChild(sprite);
+
+        const shadow = document.createElement('div');
+        shadow.style.cssText = `width: 200px; height: 20px; background: rgba(0,0,0,0.4); border-radius: 50%; margin-top: -40px; z-index: -1; filter: blur(5px);`;
+        container.appendChild(shadow);
+
+        // Create a fake HeroSpriteConfig for compatibility
+        const baseConfig: HeroSpriteConfig = {
+            spritesheetPath: spritePath,
+            frameWidth: spriteSize,
+            frameHeight: spriteSize,
+            framesPerRow: framesPerRow,
+            totalFrames: idleAnim.frames
+        };
+
+        // Store enemy definition for animation lookups
+        (container as any).enemyDef = enemyDef;
+
+        return {
+            id: 'enemy',
+            name,
+            maxHp: stats.hp,
+            hp: stats.hp,
+            level,
+            element: container,
+            spriteEl: sprite,
+            hpBarFill,
+            apBarFill,
+            statusContainer,
+            baseConfig,
+            isDead: false,
+            cooldowns: { skill1: 0, skill2: 0, skill3: 0, ult: 0 },
+            currentAnim: 'idle',
+            animFrame: 0,
+            animTimestamp: 0,
+            animReqId: null,
+            currentAnimTotalFrames: idleAnim.frames,
+            loopAnim: true,
+            skillIcons: [],
+            stats,
+            ap: 0,
+            effects: [],
+            passiveCharges: 0,
+            heroId: enemyDef.id,
+            isMelee
+        };
+    }
+
+    private playEnemyAnim(entity: BattleEntity, type: string, loop: boolean = true, onComplete?: () => void) {
+        if (entity.isDead && type !== 'dead') return;
+        if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
+
+        // Get enemy definition from stored data
+        const enemyDef = (entity.element as any).enemyDef as EnemyDefinition | undefined;
+        if (!enemyDef) {
+            // Fallback to regular playAnim for hero entities
+            this.playAnim(entity, type, loop, onComplete);
+            return;
+        }
+
+        // Map hero animation types to enemy animation types
+        const enemyAnimType = ENEMY_ANIM_MAP[type] || 'idle';
+        const animConfig = enemyDef.sprite.animations[enemyAnimType as keyof typeof enemyDef.sprite.animations];
+
+        if (!animConfig) {
+            console.warn(`[Battle] No animation found for ${enemyAnimType}, falling back to idle`);
+            return;
+        }
+
+        entity.currentAnim = type;
+        const newPath = `${enemyDef.sprite.basePath}${animConfig.file}`;
+        entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
+        entity.currentAnimTotalFrames = animConfig.frames;
+        entity.loopAnim = loop;
+        entity.onAnimComplete = onComplete;
+        entity.animFrame = 0;
+        entity.animTimestamp = 0;
+
+        const spriteSize = enemyDef.sprite.frameSize || 512;
+        const framesPerRow = animConfig.framesPerRow;
+        entity.spriteEl.style.backgroundSize = `${framesPerRow * spriteSize}px auto`;
+
+        const loopFn = (timestamp: number) => {
+            if (!entity.animTimestamp) entity.animTimestamp = timestamp;
+            if (timestamp - entity.animTimestamp > 1000 / (FPS * this.battleSpeed)) {
+                entity.animFrame++;
+                entity.animTimestamp = timestamp;
+                if (entity.animFrame >= entity.currentAnimTotalFrames) {
+                    if (entity.loopAnim) entity.animFrame = 0;
+                    else {
+                        entity.animFrame = entity.currentAnimTotalFrames - 1;
+                        if (entity.onAnimComplete) entity.onAnimComplete();
+                        return;
+                    }
+                }
+                const col = entity.animFrame % framesPerRow;
+                const row = Math.floor(entity.animFrame / framesPerRow);
+                entity.spriteEl.style.backgroundPosition = `-${col * spriteSize}px -${row * spriteSize}px`;
+            }
+            entity.animReqId = requestAnimationFrame(loopFn);
+        };
+        entity.animReqId = requestAnimationFrame(loopFn);
+    }
+
     public close() {
         if (this.battleLoopId) cancelAnimationFrame(this.battleLoopId);
         if (this.hero?.animReqId) cancelAnimationFrame(this.hero.animReqId);

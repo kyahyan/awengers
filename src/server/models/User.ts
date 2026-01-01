@@ -51,7 +51,10 @@ const userSchema = new mongoose.Schema({
     heroes: { type: Map, of: Object, default: {} },
 
     // Inventory
-    inventory: { type: Map, of: Number, default: {} }
+    inventory: { type: Map, of: Number, default: {} },
+
+    // Deployed Team (Array of instanceIds)
+    deployedTeam: [{ type: String }]
 }, { timestamps: true });
 
 export const User = mongoose.model('User', userSchema);
