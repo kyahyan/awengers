@@ -405,6 +405,7 @@ export class HeroList {
                     const upgradeModal = new HeroUpgradeModal(asset, hero.instanceId, this.user,
                         () => { this.render(); },
                         (updatedUser) => {
+                            console.log('[HeroList] onUserUpdate called with gold:', updatedUser.gold);
                             this.user = updatedUser;
                             if (this.onUserUpdate) this.onUserUpdate(updatedUser);
                             this.loadHeroes();

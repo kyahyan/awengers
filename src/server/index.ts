@@ -198,9 +198,23 @@ app.post('/api/reset-heroes', async (req, res) => {
 import { HERO_DEFINITIONS, HeroDef } from '../data/HeroDefinitions.js'; // Note .js extension for ESM
 import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager } from '../data/HeroProgression.js';
 
-const ALL_HEROES: HeroDef[] = [];
-Object.values(HERO_DEFINITIONS).forEach((list: any[]) => {
-    ALL_HEROES.push(...list);
+// Extended type that includes attribute info
+interface HeroWithAttribute extends HeroDef {
+    attribute: 'STR' | 'AGI' | 'INT';
+}
+
+const ALL_HEROES: HeroWithAttribute[] = [];
+// Map category keys to attribute codes
+const CATEGORY_TO_ATTR: Record<string, 'STR' | 'AGI' | 'INT'> = {
+    'Strength': 'STR',
+    'Agility': 'AGI',
+    'Intelligence': 'INT'
+};
+Object.entries(HERO_DEFINITIONS).forEach(([category, list]: [string, any[]]) => {
+    const attr = CATEGORY_TO_ATTR[category] || 'STR';
+    list.forEach(hero => {
+        ALL_HEROES.push({ ...hero, attribute: attr });
+    });
 });
 
 // Helper to get manager for a hero
@@ -306,10 +320,9 @@ app.post('/api/summon', async (req, res) => {
 
         const manager = getHeroManager(hero.codeName, null);
         const newInstance = manager.getHeroInstance();
-        // Ensure codeName is stored on the instance for easy lookup later if needed
         (newInstance as any).heroCodeName = hero.codeName;
         (newInstance as any).stars = 1; // All new heroes start at 1 star
-        (newInstance as any).attribute = hero.class; // STR, AGI, or INT based on hero class
+        (newInstance as any).attribute = hero.attribute; // STR, AGI, or INT from hero category
 
         userAny.heroes.set(instanceId, newInstance);
         console.log(`[Summon] ${commanderName} summoned new instance: ${instanceId} (${hero.class})`);
@@ -620,6 +633,66 @@ app.post('/api/hero/reset', async (req, res) => {
         res.json({ success: true, message: 'All heroes cleared', user: sanitizeUser(user) });
     } catch (error) {
         console.error("Reset Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// MIGRATE HEROES Endpoint - Fix attribute values for existing heroes
+app.post('/api/hero/migrate-attributes', async (req, res) => {
+    try {
+        const { commanderName } = req.body;
+        if (!commanderName) return res.status(400).json({ message: 'Missing commanderName' });
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        if (!userAny.heroes || userAny.heroes.size === 0) {
+            return res.json({ success: true, message: 'No heroes to migrate', migratedCount: 0 });
+        }
+
+        // Build a lookup from hero codeName to attribute
+        const heroToAttribute: Record<string, 'STR' | 'AGI' | 'INT'> = {};
+        Object.entries(HERO_DEFINITIONS).forEach(([category, list]: [string, any[]]) => {
+            const attr = CATEGORY_TO_ATTR[category] || 'STR';
+            list.forEach(hero => {
+                heroToAttribute[hero.codeName.toLowerCase()] = attr;
+            });
+        });
+
+        let migratedCount = 0;
+        userAny.heroes.forEach((heroData: any, instanceId: string) => {
+            // Get heroCodeName from data or extract from instanceId
+            let heroCodeName = heroData.heroCodeName;
+            if (!heroCodeName) {
+                // Extract from instanceId (format: "codename_timestamp_random")
+                const parts = instanceId.split('_');
+                heroCodeName = parts[0];
+            }
+
+            const lookupKey = heroCodeName.toLowerCase().replace(/\s+/g, ' ').trim();
+            const correctAttr = heroToAttribute[lookupKey];
+
+            if (correctAttr && heroData.attribute !== correctAttr) {
+                console.log(`[Migrate] Fixing ${instanceId}: ${heroData.attribute} -> ${correctAttr}`);
+                heroData.attribute = correctAttr;
+                migratedCount++;
+            }
+        });
+
+        user.markModified('heroes');
+        await user.save();
+
+        console.log(`[Migrate] Fixed ${migratedCount} heroes for ${commanderName}`);
+        res.json({
+            success: true,
+            message: `Migrated ${migratedCount} heroes`,
+            migratedCount,
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Migration Error:", error);
         res.status(500).json({ message: (error as Error).message });
     }
 });

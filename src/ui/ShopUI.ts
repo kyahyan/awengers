@@ -6,10 +6,11 @@ export interface ShopItem {
     id: string;
     name: string;
     xpAmount?: number;
+    coinAmount?: number;
     cost: number;
     icon: string;
     description: string;
-    itemType?: 'xp' | 'summon';
+    itemType?: 'xp' | 'summon' | 'coin';
     quantity?: number;
 }
 
@@ -21,6 +22,9 @@ export const SHOP_ITEMS: ShopItem[] = [
     // Grand Summon Scrolls
     { id: 'grand_summon_8', name: 'Grand Summon x8', quantity: 8, cost: 1000, icon: 'grand-summon', description: '8 Grand Summon Scrolls', itemType: 'summon' },
     { id: 'grand_summon_1', name: 'Grand Summon x1', quantity: 1, cost: 150, icon: 'grand-summon', description: '1 Grand Summon Scroll', itemType: 'summon' },
+    // Coin Packs
+    { id: 'coin_few', name: 'Few Coins', coinAmount: 500000, cost: 100, icon: 'few-coin', description: '500,000 Coins', itemType: 'coin' },
+    { id: 'coin_bag', name: 'Bag of Coins', coinAmount: 1500000, cost: 499, icon: 'bag-coins', description: '1,500,000 Coins', itemType: 'coin' },
     // Unavailable Items (Coming Soon)
     { id: 'common_summon', name: 'Common Summon', quantity: 1, cost: 0, icon: 'common-summon', description: 'Coming Soon...', itemType: 'summon' },
     { id: 'mythic_summon', name: 'Mythic Summon', quantity: 1, cost: 0, icon: 'mythic-summon', description: 'Coming Soon...', itemType: 'summon' },
@@ -177,6 +181,8 @@ export class ShopUI {
         let iconPath = '';
         if (item.itemType === 'summon') {
             iconPath = `/assets/home/scroll/${item.icon}.png`;
+        } else if (item.itemType === 'coin') {
+            iconPath = `/assets/shop/${item.icon}.png`;
         } else {
             iconPath = `/assets/shop/exp-icons/${item.icon}.png`;
         }

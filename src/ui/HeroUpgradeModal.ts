@@ -151,6 +151,16 @@ export class HeroUpgradeModal {
     private renderContent() {
         this.container.innerHTML = ''; // Clear previous content
 
+        // Sync fresh user data from localStorage for real-time resource updates
+        const savedSession = localStorage.getItem('awengers_session');
+        if (savedSession) {
+            try {
+                this.user = JSON.parse(savedSession);
+            } catch (e) {
+                console.warn('[HeroUpgradeModal] Failed to parse session from localStorage');
+            }
+        }
+
         const heroLevel = this.heroManager.getCurrentLevel();
         const stats = this.heroManager.getCurrentStats();
         const config = this.heroManager.getConfig();
@@ -698,7 +708,10 @@ export class HeroUpgradeModal {
             if (res.ok && data.success) {
                 // Update local user object FIRST with server response
                 this.user = data.user;
+                console.log('[HeroUpgradeModal] Level up success, calling onUpdate with gold:', data.user.gold);
                 this.onUpdate(data.user);
+                // Persist to localStorage so header and modal read fresh data
+                localStorage.setItem('awengers_session', JSON.stringify(data.user));
 
                 // Now recreate manager with updated instance data from the NEW user
                 let instanceData;
@@ -748,6 +761,8 @@ export class HeroUpgradeModal {
                 // Update local user object with server response
                 this.user = data.user;
                 this.onUpdate(data.user);
+                // Persist to localStorage so header and modal read fresh data
+                localStorage.setItem('awengers_session', JSON.stringify(data.user));
 
                 // Recreate manager with updated instance data
                 let instanceData;
@@ -785,6 +800,8 @@ export class HeroUpgradeModal {
             if (res.ok && data.success) {
                 this.user = data.user;
                 this.onUpdate(data.user);
+                // Persist to localStorage so header and modal read fresh data
+                localStorage.setItem('awengers_session', JSON.stringify(data.user));
 
                 // Manually increment rank index for local manager view
                 (this.heroManager as any).heroInstance.currentRankIndex++;
@@ -976,6 +993,12 @@ export class HeroUpgradeModal {
 
     getBackdrop(): HTMLElement {
         return this.backdrop;
+    }
+
+    // Update user data and re-render (for real-time resource updates)
+    public updateUser(user: any) {
+        this.user = user;
+        this.renderContent();
     }
 
     private renderEquipmentPanel(container: HTMLElement) {
@@ -1598,6 +1621,8 @@ export class HeroUpgradeModal {
                 // Update local user state
                 this.user = data.user;
                 this.onUpdate(data.user);
+                // Persist to localStorage so renderContent reads fresh data
+                localStorage.setItem('awengers_session', JSON.stringify(data.user));
 
                 // Clear selections
                 this.selectedSacrifices.clear();

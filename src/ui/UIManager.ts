@@ -208,11 +208,27 @@ export class UIManager {
         this.topHud.appendChild(this.debugEl);
 
         // Initialize Hero List (Hidden by default)
-        this.heroList = new HeroList((selectedNames) => {
-            if (this.onHeroesSelected) {
-                this.onHeroesSelected(selectedNames);
+        this.heroList = new HeroList(
+            (selectedNames) => {
+                if (this.onHeroesSelected) {
+                    this.onHeroesSelected(selectedNames);
+                }
+            },
+            (heroName) => {
+                // Navigate to hero preview
+                this.visibleHeroNames = this.heroList!.getVisibleHeroNames();
+                this.currentHeroIndex = this.visibleHeroNames.indexOf(heroName);
+                this.showHeroPreview(heroName);
+            },
+            true,
+            this.currentUser,
+            (updatedUser) => {
+                console.log('[UIManager] onUserUpdate callback (init), gold:', updatedUser.gold, 'headerUI exists:', !!this.headerUI);
+                this.currentUser = updatedUser;
+                if (this.headerUI) this.headerUI.update(this.currentUser);
+                localStorage.setItem('awengers_session', JSON.stringify(this.currentUser));
             }
-        });
+        );
 
         this.listsContainer = document.createElement('div');
         this.listsContainer.style.display = 'none';
@@ -760,6 +776,7 @@ export class UIManager {
                             false,
                             this.currentUser,
                             (updatedUser) => {
+                                console.log('[UIManager] onUserUpdate callback, gold:', updatedUser.gold, 'headerUI exists:', !!this.headerUI);
                                 this.currentUser = updatedUser;
                                 if (this.headerUI) this.headerUI.update(this.currentUser);
                                 localStorage.setItem('awengers_session', JSON.stringify(this.currentUser));
@@ -1487,6 +1504,10 @@ export class UIManager {
                 const currentCount = this.currentUser.inventory[itemKey] || 0;
                 this.currentUser.inventory[itemKey] = currentCount + item.quantity;
                 console.log(`Purchased ${item.quantity} ${itemKey}. New total: ${this.currentUser.inventory[itemKey]}`);
+            } else if (item.itemType === 'coin' && item.coinAmount) {
+                // Add Coins to gold
+                this.currentUser.gold = (this.currentUser.gold || 0) + item.coinAmount;
+                console.log(`Purchased ${item.coinAmount.toLocaleString()} coins. New total: ${this.currentUser.gold.toLocaleString()}`);
             } else if (item.xpAmount) {
                 // Add XP
                 addPlayerXp(this.currentUser, item.xpAmount);
