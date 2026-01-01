@@ -11,15 +11,15 @@ if (mapLayer) {
     // Define island pieces with their positions (based on reference layout)
     // Positions are percentages from top-left of the map container
     const islands = [
-        { id: 1, name: 'Waterfall Peak', x: 44, y: 2, width: 26, z: 1 },      // Top-left waterfall mountain
-        { id: 2, name: 'Golden Palace', x: 18, y: 22, width: 40, z: 1 },     // Main central island (large)
-        { id: 3, name: 'Cherry Temple', x: 41, y: 54, width: 20, z: 4 },      // Top-right cherry blossom
-        { id: 4, name: 'Volcanic Pit', x: 70, y: 0, width: 24, z: 1 },       // Left volcano island
-        { id: 5, name: 'Lotus Shrine', x: 54, y: 28, width: 26, z: 3 },       // Top-center pagoda
-        { id: 6, name: 'Red Pagoda', x: 20, y: 53, width: 30, z: 4 },        // Center-right temple
-        { id: 7, name: 'Shadow Temple', x: 22, y: -10, width: 22, z: 1 },     // Bottom-center dark temple
-        { id: 8, name: 'Desert Fortress', x: 80, y: 47, width: 24, z: 1 },   // Bottom-right desert
-        { id: 9, name: 'Grand Mainland', x: -10, y: 35, width: 26, z: 1 },    // Large mainland piece
+        { id: 1, name: 'The Jade Lotus Shrine', file: '1.png', x: 44, y: 2, width: 26, z: 1 },
+        { id: 2, name: 'The Imperial Stronghold', file: '2.png', x: 18, y: 22, width: 40, z: 1 },
+        { id: 3, name: 'The Solitary Grove', file: '3.png', x: 41, y: 54, width: 20, z: 4 },
+        { id: 4, name: 'The Sakura Dreamscape', file: '4.png', x: 70, y: 0, width: 24, z: 1 },
+        { id: 5, name: 'The Sunset Temple', file: '5.png', x: 54, y: 28, width: 26, z: 3 },
+        { id: 6, name: 'The Necro-Swamp', file: '6.png', x: 20, y: 53, width: 30, z: 4 },
+        { id: 7, name: 'Skull Rock Cavern', file: '7.png', x: 22, y: -10, width: 22, z: 1 },
+        { id: 8, name: 'The Dusty Ruins', file: '8.png', x: 80, y: 47, width: 24, z: 1 },
+        { id: 9, name: 'The Dragon’s Maw', file: '9.png', x: -10, y: 35, width: 26, z: 1 },
     ];
 
     islands.forEach(island => {
@@ -33,7 +33,10 @@ if (mapLayer) {
         wrapper.style.zIndex = String(island.z);
 
         const img = document.createElement('img');
-        img.src = `/assets/map/${island.id}.png`;
+        // Use custom file name if provided, otherwise default to png
+        // @ts-ignore
+        const fileName = island.file || `${island.id}.png`;
+        img.src = `/assets/map/${fileName}`;
         img.alt = island.name;
         img.draggable = false;
 
@@ -49,6 +52,16 @@ if (mapLayer) {
         // Click handler
         wrapper.addEventListener('click', () => {
             console.log(`[Map] Clicked: ${island.name} (Island ${island.id})`);
+
+            // Adventure Mode Hook
+            if (island.id === 1) {
+                // @ts-ignore
+                if (window.game && window.game.uiManager) {
+                    // @ts-ignore
+                    window.game.uiManager.showAdventureModal(island.id);
+                }
+            }
+
             // You can dispatch a custom event or call a function here
             const event = new CustomEvent('islandClick', { detail: island });
             document.dispatchEvent(event);

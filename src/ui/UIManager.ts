@@ -11,6 +11,7 @@ import { HeroDetailUI } from './HeroDetailUI';
 import { GalleryHeroModal } from './GalleryHeroModal';
 import { UserProfile, addPlayerXp } from '../data/UserProfile';
 import { HERO_ASSETS } from '../data/HeroAssetsMap';
+import { AdventureModal } from './AdventureModal';
 
 export class UIManager {
     private debugEl!: HTMLElement;
@@ -32,6 +33,7 @@ export class UIManager {
     public onPreviewHero?: (heroName: string) => void;
     public onPreviewClose?: () => void;
     private heroDetailUI: HeroDetailUI | null = null;
+    private adventureModal: AdventureModal | null = null;
 
     // Hero navigation tracking
     private visibleHeroNames: string[] = [];
@@ -545,6 +547,19 @@ export class UIManager {
         if (this.backBtn) this.backBtn.style.display = 'none';
 
         if (this.homeProfileCard) this.homeProfileCard.style.display = 'flex';
+    }
+
+    public showAdventureModal(mapId: number) {
+        if (this.adventureModal) {
+            this.adventureModal.getElement().remove();
+        }
+
+        this.adventureModal = new AdventureModal(() => {
+            this.adventureModal = null;
+        });
+
+        this.uiContainer?.appendChild(this.adventureModal.getElement());
+        console.log(`[UIManager] Opened Adventure Modal for Map ${mapId}`);
     }
 
 
