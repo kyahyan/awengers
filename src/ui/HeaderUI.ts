@@ -33,7 +33,12 @@ export class HeaderUI {
         if (this.heroPotionText) this.heroPotionText.innerText = user.heroPotion ? user.heroPotion.toLocaleString() : '0';
         if (this.soulPotionText) this.soulPotionText.innerText = user.soulPotion ? user.soulPotion.toLocaleString() : '0';
         if (this.avatarImg) this.avatarImg.src = `/assets/avatar/${user.avatarId || '1'}.png`;
-        if (this.rankImg) this.rankImg.src = `/assets/ranks/${user.rank || '1'}.png`;
+        if (this.rankImg) {
+            const rankDefs = ['Scout', 'Warden', 'Hunter', 'Alpha', 'Apex', 'Primal', 'Celestial', 'Eternal'];
+            let rankIndex = rankDefs.indexOf(user.rankTitle || 'Scout');
+            if (rankIndex === -1) rankIndex = 0;
+            this.rankImg.src = `/assets/ranks/${rankIndex + 1}.png`;
+        }
         if (this.rankTitleText) this.rankTitleText.innerText = user.rankTitle || 'Recruit';
         if (this.usernameText) this.usernameText.innerText = user.commanderName || 'Commander';
         // Update EXP bar

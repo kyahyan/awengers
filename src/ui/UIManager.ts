@@ -132,7 +132,7 @@ export class UIManager {
             if (this.homeProfileCard && this.homeProfileCard.parentNode) {
                 this.homeProfileCard.parentNode.removeChild(this.homeProfileCard);
             }
-            this.createHomeProfileCard();
+            // this.createHomeProfileCard(); // Sidebar disabled
 
             // Also update HUD button if visible?
             const profileBtnName = document.querySelector('.hud-name');
@@ -1493,8 +1493,19 @@ export class UIManager {
 
     private handleShopBuy(item: ShopItem) {
         if (!this.currentUser) return;
-        if (this.currentUser.gems >= item.cost) {
-            this.currentUser.gems -= item.cost;
+
+        // Check Affordability
+        const canAfford = item.currencyType === 'coin'
+            ? this.currentUser.gold >= item.cost
+            : this.currentUser.gems >= item.cost;
+
+        if (canAfford) {
+            // Deduct Cost
+            if (item.currencyType === 'coin') {
+                this.currentUser.gold -= item.cost;
+            } else {
+                this.currentUser.gems -= item.cost;
+            }
 
             // Handle different item types
             if (item.itemType === 'summon' && item.quantity) {
@@ -1508,6 +1519,12 @@ export class UIManager {
                 // Add Coins to gold
                 this.currentUser.gold = (this.currentUser.gold || 0) + item.coinAmount;
                 console.log(`Purchased ${item.coinAmount.toLocaleString()} coins. New total: ${this.currentUser.gold.toLocaleString()}`);
+            } else if (item.itemType === 'tier1_item') {
+                // Add Item to Inventory
+                if (!this.currentUser.inventory) this.currentUser.inventory = {};
+                const currentCount = this.currentUser.inventory[item.id] || 0;
+                this.currentUser.inventory[item.id] = currentCount + 1;
+                console.log(`Purchased ${item.name}. New quantity: ${this.currentUser.inventory[item.id]}`);
             } else if (item.xpAmount) {
                 // Add XP
                 addPlayerXp(this.currentUser, item.xpAmount);
@@ -1526,7 +1543,7 @@ export class UIManager {
 
             this.syncUser();
         } else {
-            console.log("Not enough gems");
+            console.log(`Not enough ${item.currencyType === 'coin' ? 'Gold' : 'Gems'}`);
             // Optionally show error feedback
         }
     }

@@ -1,5 +1,6 @@
 import { HeroAssetConfig, HERO_ASSETS } from '../data/HeroAssetsMap';
 import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition, HeroInstance } from '../data/HeroProgression';
+import { ITEMS } from '../data/Items';
 
 export class HeroUpgradeModal {
     private backdrop: HTMLElement;
@@ -58,7 +59,8 @@ export class HeroUpgradeModal {
             level: savedData.level,
             currentRankIndex: savedData.currentRankIndex || 0,
             experience: savedData.experience || 0,
-            skillLevels: savedData.skillLevels || {}
+            skillLevels: savedData.skillLevels || {},
+            equipment: savedData.equipment || new Array(9).fill(null)
         } : undefined;
 
         // Determine which hero progression to use based on hero name
@@ -506,9 +508,9 @@ export class HeroUpgradeModal {
             border: 1px solid rgba(255,255,255,0.1);
         `;
         powerBox.innerHTML = `
-            <img src="/assets/attr/fist.png" style="width: 24px; height: 24px; object-fit: contain;">
+            <img src="/assets/attr/fist.png" style="width: 54px; height: 54px; object-fit: contain;">
             <div>
-                <div style="color: #9ca3af; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;">CP</div>
+                <div style="color: #9ca3af; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;">Combat Power</div>
                 <div style="color: #fbbf24; font-size: 1.2rem; font-weight: 800; line-height: 1;">${heroPower.toLocaleString()}</div>
             </div>
         `;
@@ -1001,67 +1003,7 @@ export class HeroUpgradeModal {
         this.renderContent();
     }
 
-    private renderEquipmentPanel(container: HTMLElement) {
-        // Title
-        const title = document.createElement('div');
-        title.innerHTML = `<div style="color: #fbbf24; font-size: 1.1rem; font-weight: bold; text-align: center; margin-bottom: 20px; letter-spacing: 1px;">HERO EQUIPMENT</div>`;
-        container.appendChild(title);
 
-        // Grid
-        const grid = document.createElement('div');
-        grid.style.cssText = `
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            padding: 10px;
-        `;
-
-        const slots = [
-            { type: 'Weapon', icon: '⚔️' },
-            { type: 'Helmet', icon: '🪖' },
-            { type: 'Armor', icon: '🛡️' },
-            { type: 'Boots', icon: '👢' },
-            { type: 'Ring', icon: '💍' },
-            { type: 'Amulet', icon: '🧿' }
-        ];
-
-        slots.forEach(slot => {
-            const slotEl = document.createElement('div');
-            slotEl.style.cssText = `
-                aspect-ratio: 1;
-                background: rgba(255,255,255,0.05);
-                border: 2px dashed rgba(255,255,255,0.2);
-                border-radius: 12px;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                cursor: pointer;
-                transition: all 0.2s;
-            `;
-            slotEl.onmouseenter = () => {
-                slotEl.style.background = 'rgba(255,255,255,0.1)';
-                slotEl.style.borderColor = 'rgba(255,255,255,0.4)';
-            };
-            slotEl.onmouseleave = () => {
-                slotEl.style.background = 'rgba(255,255,255,0.05)';
-                slotEl.style.borderColor = 'rgba(255,255,255,0.2)';
-            };
-
-            slotEl.innerHTML = `
-                <div style="font-size: 2rem; opacity: 0.5; margin-bottom: 5px;">${slot.icon}</div>
-                <div style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase;">${slot.type}</div>
-            `;
-            grid.appendChild(slotEl);
-        });
-
-        container.appendChild(grid);
-
-        // Info Text
-        const info = document.createElement('div');
-        info.innerHTML = `<div style="text-align: center; color: #6b7280; font-size: 0.8rem; margin-top: 20px;">Equip items to boost stats.<br>(Coming Soon)</div>`;
-        container.appendChild(info);
-    }
 
     private renderMergePanel(container: HTMLElement, milestone: any, currentStars: number) {
         // The next star level is always currentStars + 1 (not milestone.starRequirement which is the gate)
@@ -1657,6 +1599,240 @@ export class HeroUpgradeModal {
         } catch (e) {
             console.error('Merge Error:', e);
             alert('Network error. Please check your connection.');
+        }
+    }
+
+
+    private renderEquipmentPanel(container: HTMLElement) {
+        const grid = document.createElement('div');
+        grid.style.cssText = `
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 10px; 
+            margin-top: 10px;
+        `;
+
+        const equipment = this.heroManager.getHeroInstance().equipment;
+
+        for (let i = 0; i < 9; i++) {
+            const slot = document.createElement('div');
+            const itemId = equipment[i];
+
+            slot.style.cssText = `
+                aspect-ratio: 1;
+                background: rgba(0,0,0,0.5);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                position: relative;
+                transition: all 0.2s;
+            `;
+
+            slot.onmouseenter = () => { slot.style.borderColor = '#fbbf24'; };
+            slot.onmouseleave = () => { slot.style.borderColor = 'rgba(255,255,255,0.1)'; };
+            slot.onclick = () => this.openEquipmentSelection(i);
+
+            if (itemId) {
+                // Item Exists
+                const itemDef = ITEMS[itemId];
+                if (itemDef) {
+                    const iconPath = itemDef.icon || '/assets/items/unknown.png';
+                    slot.innerHTML = `<img src="${iconPath}" style="width: 80%; height: 80%; object-fit: contain;">`;
+                    slot.title = `${itemDef.name}\n${itemDef.description}\n\nStats:\n${this.formatStats(itemDef.stats)}`;
+                } else {
+                    slot.innerHTML = `?`;
+                }
+            } else {
+                // Empty
+                slot.innerHTML = `<span style="font-size: 2rem; color: rgba(255,255,255,0.2);">+</span>`;
+            }
+
+            grid.appendChild(slot);
+        }
+
+        container.appendChild(grid);
+
+        // Display Current Equipment Stats Summary
+        const eqStats = this.heroManager.getEquipmentStats();
+        // Only show if there are some stats
+        const hasStats = Object.values(eqStats).some(val => val > 0);
+
+        if (hasStats) {
+            const summary = document.createElement('div');
+            summary.style.cssText = `margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);`;
+            summary.innerHTML = `<div style="color: #fbbf24; font-size: 0.9rem; margin-bottom: 8px;">EQUIPMENT BONUSES</div>`;
+
+            if (eqStats.hp) summary.innerHTML += `<div style="font-size: 0.85rem; color: #ccc;">HP: <span style="color:#fff">+${eqStats.hp}</span></div>`;
+            if (eqStats.atk) summary.innerHTML += `<div style="font-size: 0.85rem; color: #ccc;">ATK: <span style="color:#fff">+${eqStats.atk}</span></div>`;
+            if (eqStats.armor) summary.innerHTML += `<div style="font-size: 0.85rem; color: #ccc;">ARMOR: <span style="color:#fff">+${eqStats.armor}</span></div>`;
+            if (eqStats.moveSpeed) summary.innerHTML += `<div style="font-size: 0.85rem; color: #ccc;">SPD: <span style="color:#fff">+${eqStats.moveSpeed}</span></div>`;
+            if (eqStats.lifesteal) summary.innerHTML += `<div style="font-size: 0.85rem; color: #ccc;">L.STEAL: <span style="color:#fff">+${eqStats.lifesteal}%</span></div>`;
+
+            container.appendChild(summary);
+        }
+    }
+
+    private formatStats(stats: any): string {
+        if (!stats) return '';
+        return Object.entries(stats)
+            .map(([key, val]) => `${key.toUpperCase()}: +${val}`)
+            .join('\n');
+    }
+
+    private openEquipmentSelection(slotIndex: number) {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+                position: absolute; inset: 0; background: rgba(0,0,0,0.95); 
+                z-index: 20; display: flex; flex-direction: column; padding: 20px;
+            `;
+
+        // Check inventory for equipment
+        const inventory = this.user.inventory || {};
+        const items: { id: string, count: number }[] = [];
+
+        // Handle Map vs Object
+        if (this.user.inventory instanceof Map) {
+            // If Map (shouldn't be in frontend typically unless serialized oddly, but legacy check)
+            // Frontend usually receives object from JSON.
+        }
+        // Assume Object if not Map, or check
+        // The sanitize helper returns object for inventory.
+        if (inventory && typeof inventory === 'object') {
+            Object.entries(inventory).forEach(([key, val]) => items.push({ id: key, count: val as number }));
+        }
+
+        const equipmentItems = items.filter(i => {
+            const def = ITEMS[i.id];
+            return def && def.type === 'equipment' && i.count > 0;
+        });
+
+        // Header
+        const header = document.createElement('div');
+        header.innerHTML = `
+                <div style="font-weight: bold; font-size: 1.2rem; margin-bottom: 20px; color: #fff;">Select Equipment (Slot ${slotIndex + 1})</div>
+            `;
+        overlay.appendChild(header);
+
+        if (equipmentItems.length === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.innerText = "No equipment available in items.";
+            emptyMsg.style.color = '#888';
+            overlay.appendChild(emptyMsg);
+        } else {
+            // List Container
+            const list = document.createElement('div');
+            list.style.cssText = `flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-content: start;`;
+
+            equipmentItems.forEach(item => {
+                const def = ITEMS[item.id];
+                const el = document.createElement('div');
+                el.style.cssText = `
+                        aspect-ratio: 1; border: 1px solid #444; border-radius: 8px; 
+                        background: rgba(40,40,40,0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;
+                        position: relative;
+                     `;
+                el.innerHTML = `
+                    <div style="position: absolute; top: 2px; right: 4px; font-size: 0.7rem; color: #aaa;">x${item.count}</div>
+                    <img src="${def.icon}" style="width: 70%; height: 70%; object-fit: contain;">
+                `;
+                el.onclick = () => {
+                    this.handleEquip(slotIndex, item.id);
+                    overlay.remove();
+                };
+                el.title = `${def.name}`;
+                list.appendChild(el);
+            });
+            overlay.appendChild(list);
+        }
+
+        // Action Buttons
+        const btnContainer = document.createElement('div');
+        btnContainer.style.marginTop = 'auto';
+        btnContainer.style.display = 'flex';
+        btnContainer.style.gap = '10px';
+
+        // Unequip Button
+        const unequipBtn = document.createElement('button');
+        unequipBtn.innerText = "Unequip Slot";
+        unequipBtn.style.cssText = `flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;`;
+        unequipBtn.onclick = () => {
+            this.handleEquip(slotIndex, null);
+            overlay.remove();
+        };
+
+        // Close Button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = "Cancel";
+        closeBtn.style.cssText = `flex: 1; padding: 12px; background: #555; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;`;
+        closeBtn.onclick = () => overlay.remove();
+
+        btnContainer.appendChild(unequipBtn);
+        btnContainer.appendChild(closeBtn);
+        overlay.appendChild(btnContainer);
+
+        // We append to local right panel or main container?
+        // Right Panel is small (380px). List might be cramped but okay.
+        // Let's modify render open logic to append to the RIGHT PANEL container specifically so it covers it.
+        // But renderEquipmentPanel argument `container` is the right panel.
+        // I don't have reference to it here easily unless I store it or pass it.
+        // But `this.container` is the main modal.
+        // If I append to `this.container` it covers the whole screen? No, `this.container` is the modal box.
+        // Let's append to `this.container` but maybe style it to overlay the right side?
+        // Or simpler: just cover the modal.
+        this.container.appendChild(overlay);
+    }
+
+    private async handleEquip(slotIndex: number, itemId: string | null) {
+        try {
+            const commanderName = this.user.commanderName;
+            const res = await fetch('http://localhost:3000/api/hero/equip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commanderName,
+                    instanceId: this.instanceId,
+                    slotIndex,
+                    itemId
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Update local user
+                this.user = data.user;
+                this.onUpdate(data.user);
+                localStorage.setItem('awengers_session', JSON.stringify(data.user));
+
+                // Update Manager
+                // Recreate or hack update
+                // Since heroInstance is inside manager private, we need to recreate manager or cast to any
+                // Recreating manager is safer
+
+                let instanceData;
+                if (this.user.heroes instanceof Map) {
+                    instanceData = this.user.heroes.get(this.instanceId);
+                } else {
+                    instanceData = this.user.heroes[this.instanceId];
+                }
+                // Legacy handling for map/obj
+                if (!instanceData && this.user.heroes instanceof Map) {
+                    // Try converting key via string
+                    // Actually instanceId is the key.
+                }
+
+                this.heroManager = this.recreateManager(data.user.heroes[this.instanceId]?.level || this.heroManager.getCurrentLevel(), data.user.heroes[this.instanceId]);
+
+                this.renderContent();
+            } else {
+                alert(data.message || 'Equip Failed');
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Network Error");
         }
     }
 }

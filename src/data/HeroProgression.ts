@@ -3,6 +3,8 @@
  * Handles leveling, resource consumption, rank-ups, and skill unlocks
  */
 
+import { ITEMS } from './Items';
+
 // ==================== INTERFACES ====================
 
 export interface StatMilestone {
@@ -63,7 +65,13 @@ export interface HeroInstance {
     currentRankIndex: number;
     experience: number;
     skillLevels: Record<string, number>;
+    equipment: (string | null)[]; // 9 Slots
 }
+
+// ... (In HeroProgressionManager)
+
+
+
 
 export interface LevelCost {
     gold: number;
@@ -294,7 +302,8 @@ export class HeroProgressionManager {
             level: 1,
             currentRankIndex: 0,
             experience: 0,
-            skillLevels: {}
+            skillLevels: {},
+            equipment: new Array(9).fill(null)
         };
     }
 
@@ -635,8 +644,74 @@ export class HeroProgressionManager {
         return this.heroInstance.level;
     }
 
+    getEquipmentStats(): { hp: number; atk: number; armor: number; moveSpeed: number; lifesteal: number } {
+        const stats = { hp: 0, atk: 0, armor: 0, moveSpeed: 0, lifesteal: 0 };
+
+        if (this.heroInstance.equipment) {
+            this.heroInstance.equipment.forEach(itemId => {
+                if (!itemId) return;
+                const item = ITEMS[itemId];
+                if (item && item.stats) {
+                    if (item.stats.hp) stats.hp += item.stats.hp;
+                    if (item.stats.armor) stats.armor += item.stats.armor;
+                    if (item.stats.moveSpeed) stats.moveSpeed += item.stats.moveSpeed;
+                    if (item.stats.lifesteal) stats.lifesteal += item.stats.lifesteal;
+
+                    let atkBonus = 0;
+                    if (item.stats.atk) atkBonus += item.stats.atk;
+                    if (item.stats.str) atkBonus += item.stats.str;
+                    if (item.stats.agi) atkBonus += item.stats.agi;
+                    if (item.stats.int) atkBonus += item.stats.int;
+                    stats.atk += atkBonus;
+                }
+            });
+        }
+        return stats;
+    }
+
+    /**
+     * Calculates total stats including base, rank, and equipment
+     */
+    getTotalStats(): { hp: number; atk: number; armor: number; aspd: number; moveSpeed: number; lifesteal: number } {
+        const base = this.getStatsAtLevel(this.heroInstance.level);
+        const stats = {
+            hp: base.hp,
+            atk: base.atk,
+            armor: base.armor,
+            aspd: base.aspd,
+            moveSpeed: base.moveSpeed,
+            lifesteal: 0
+        };
+
+        if (this.heroInstance.equipment) {
+            this.heroInstance.equipment.forEach(itemId => {
+                if (!itemId) return;
+                const item = ITEMS[itemId];
+                if (item && item.stats) {
+                    if (item.stats.hp) stats.hp += item.stats.hp;
+                    if (item.stats.armor) stats.armor += item.stats.armor;
+                    if (item.stats.moveSpeed) stats.moveSpeed += item.stats.moveSpeed;
+                    if (item.stats.lifesteal) stats.lifesteal += item.stats.lifesteal;
+
+                    // ATK Mapping (Simple Sum for now)
+                    let atkBonus = 0;
+                    if (item.stats.atk) atkBonus += item.stats.atk;
+                    if (item.stats.str) atkBonus += item.stats.str;
+                    if (item.stats.agi) atkBonus += item.stats.agi;
+                    if (item.stats.int) atkBonus += item.stats.int;
+                    stats.atk += atkBonus;
+                }
+            });
+        }
+        return stats;
+    }
+
     getCurrentStats(): StatMilestone {
-        return this.getStatsAtLevel(this.heroInstance.level);
+        const total = this.getTotalStats();
+        return {
+            level: this.heroInstance.level,
+            ...total
+        };
     }
 }
 
@@ -652,7 +727,8 @@ export function createOryxHero(startingLevel: number = 1, instance?: HeroInstanc
         level: startingLevel,
         currentRankIndex: 0,
         experience: 0,
-        skillLevels: {}
+        skillLevels: {},
+        equipment: new Array(9).fill(null)
     };
 
     // Calculate starting rank based on level
@@ -776,7 +852,8 @@ export function createRazorHero(startingLevel: number = 1, instance?: HeroInstan
         level: startingLevel,
         currentRankIndex: 0,
         experience: 0,
-        skillLevels: {}
+        skillLevels: {},
+        equipment: new Array(9).fill(null)
     };
 
     // Calculate starting rank based on level
@@ -799,7 +876,8 @@ export function createSableHero(startingLevel: number = 1, instance?: HeroInstan
         level: startingLevel,
         currentRankIndex: 0,
         experience: 0,
-        skillLevels: {}
+        skillLevels: {},
+        equipment: new Array(9).fill(null)
     };
 
     // Calculate starting rank based on level

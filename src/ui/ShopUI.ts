@@ -8,10 +8,12 @@ export interface ShopItem {
     xpAmount?: number;
     coinAmount?: number;
     cost: number;
+    currencyType?: 'gem' | 'coin';
     icon: string;
     description: string;
-    itemType?: 'xp' | 'summon' | 'coin';
+    itemType?: 'xp' | 'summon' | 'coin' | 'tier1_item';
     quantity?: number;
+    stats?: { [key: string]: number };
 }
 
 export const SHOP_ITEMS: ShopItem[] = [
@@ -29,6 +31,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'common_summon', name: 'Common Summon', quantity: 1, cost: 0, icon: 'common-summon', description: 'Coming Soon...', itemType: 'summon' },
     { id: 'mythic_summon', name: 'Mythic Summon', quantity: 1, cost: 0, icon: 'mythic-summon', description: 'Coming Soon...', itemType: 'summon' },
     { id: 'shards', name: 'Hero Shards', quantity: 1, cost: 0, icon: 'shards', description: 'Coming Soon...', itemType: 'summon' },
+    // Tier 1 Items (Cost: 500 Coins)
+    { id: 'iron_leaf', name: 'Iron Leaf', cost: 500, currencyType: 'coin', icon: 'Iron Leaf', description: '+5 Defense', itemType: 'tier1_item', stats: { defense: 5 } },
+    { id: 'bear_claw', name: 'Bear Claw', cost: 500, currencyType: 'coin', icon: 'Bear Claw', description: '+5 Strength', itemType: 'tier1_item', stats: { strength: 5 } },
+    { id: 'swift_paw', name: 'Swift Paw', cost: 500, currencyType: 'coin', icon: 'Swift Paw', description: '+5 Agility', itemType: 'tier1_item', stats: { agility: 5 } },
+    { id: 'wisdom_plume', name: 'Wisdom Plume', cost: 500, currencyType: 'coin', icon: 'Wisdom Plume', description: '+5 Intelligence', itemType: 'tier1_item', stats: { intelligence: 5 } },
+    { id: 'turtle_shell', name: 'Turtle Shell Fragment', cost: 500, currencyType: 'coin', icon: 'Turtle Shell Fragment', description: '+8 Defense', itemType: 'tier1_item', stats: { defense: 8 } },
+    { id: 'ring_life', name: 'Ring of Life', cost: 500, currencyType: 'coin', icon: 'Ring of Life', description: '+50 Max HP', itemType: 'tier1_item', stats: { hp: 50 } },
+    { id: 'vampire_tooth', name: 'Vampire Tooth', cost: 500, currencyType: 'coin', icon: 'Vampire Tooth', description: '+3% Lifesteal', itemType: 'tier1_item', stats: { lifesteal: 3 } },
+    { id: 'basic_boots', name: 'Basic Boots', cost: 500, currencyType: 'coin', icon: 'Basic Boots', description: '+5 Move Speed', itemType: 'tier1_item', stats: { speed: 5 } },
 ];
 
 export class ShopUI {
@@ -175,7 +186,9 @@ export class ShopUI {
 
     private renderItem(item: ShopItem): string {
         const isUnavailable = item.cost === 0;
-        const canAfford = !isUnavailable && this.user.gems >= item.cost;
+        const canAfford = item.currencyType === 'coin'
+            ? this.user.gold >= item.cost
+            : this.user.gems >= item.cost;
 
         // Determine icon path based on item type
         let iconPath = '';
@@ -183,6 +196,8 @@ export class ShopUI {
             iconPath = `/assets/home/scroll/${item.icon}.png`;
         } else if (item.itemType === 'coin') {
             iconPath = `/assets/shop/${item.icon}.png`;
+        } else if (item.itemType === 'tier1_item') {
+            iconPath = `/assets/item/Tier 1/${item.icon}.png`;
         } else {
             iconPath = `/assets/shop/exp-icons/${item.icon}.png`;
         }
@@ -199,7 +214,7 @@ export class ShopUI {
                 ` : `
                     <button class="buy-btn ${!canAfford ? 'disabled' : ''}" data-id="${item.id}" ${!canAfford ? 'disabled' : ''}>
                         <span>${item.cost.toLocaleString()}</span>
-                        <span class="cost-icon">💎</span>
+                        <span class="cost-icon">${item.currencyType === 'coin' ? '🪙' : '💎'}</span>
                     </button>
                 `}
             </div>

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "server": "tsx src/server/index.ts"
+    "server": "tsx --watch src/server/index.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

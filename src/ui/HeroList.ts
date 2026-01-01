@@ -21,6 +21,7 @@ export class HeroList {
     private heroes: HeroData[];
     private currentMode: 'VIEW' | 'SELECT' = 'VIEW';
     private currentFilter: string = 'Strength';
+    private currentSort: string = '';
     private selectedHeroes: Set<string>;
     // private ownedHeroes: Set<string>; // Deprecated
     private onSelect: (selectedNames: string[]) => void;
@@ -155,6 +156,32 @@ export class HeroList {
         this.render();
     }
 
+    private sortHeroes(sortOption: string) {
+        if (sortOption === 'Sort By...') return;
+
+        this.heroes.sort((a, b) => {
+            switch (sortOption) {
+                case 'Star ↓': return b.stars - a.stars;
+                case 'Star ↑': return a.stars - b.stars;
+                case 'Level ↓': return b.level - a.level;
+                case 'Level ↑': return a.level - b.level;
+                case 'Power ↓': return (this.calculateHeroPower(b) || 0) - (this.calculateHeroPower(a) || 0);
+                case 'Power ↑': return (this.calculateHeroPower(a) || 0) - (this.calculateHeroPower(b) || 0);
+                case 'Species': return a.species.localeCompare(b.species);
+                case 'Mythic': return (b.stars >= 5 ? 1 : 0) - (a.stars >= 5 ? 1 : 0);
+                default: return 0;
+            }
+        });
+        this.render();
+    }
+
+    private calculateHeroPower(hero: HeroData): number {
+        // Simple power formula based on level and stars
+        const basePower = hero.level * 100;
+        const starMultiplier = 1 + (hero.stars - 1) * 0.5;
+        return Math.round(basePower * starMultiplier);
+    }
+
     private render() {
         console.log(`[HeroList] Rendering. Heroes: ${this.heroes.length}, Mode: ${this.currentMode}, Filter: ${this.currentFilter}`);
         this.container.innerHTML = '';
@@ -168,59 +195,119 @@ export class HeroList {
         if (this.showFilterBar) {
             const filterBar = document.createElement('div');
             filterBar.className = 'filter-bar';
-            filterBar.style.position = 'absolute';
-            filterBar.style.top = '100px';
-            filterBar.style.left = '50%';
-            filterBar.style.transform = 'translateX(-50%)';
-            filterBar.style.width = 'auto';
-            filterBar.style.height = '50px';
-            filterBar.style.display = 'flex';
-            filterBar.style.justifyContent = 'center';
-            filterBar.style.alignItems = 'center';
-            filterBar.style.gap = '15px';
-            filterBar.style.zIndex = '100';
-            filterBar.style.pointerEvents = 'auto';
+            filterBar.style.cssText = `
+                position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+                width: 90%; max-width: 900px;
+                display: flex; justify-content: space-between; align-items: center;
+                z-index: 100; pointer-events: auto;
+            `;
 
-            const filters = ['Strength', 'Agility', 'Intelligence'];
-            filters.forEach(filter => {
+            // LEFT SIDE: Attribute Filters
+            const attrGroup = document.createElement('div');
+            attrGroup.style.cssText = `display: flex; gap: 8px; align-items: center;`;
+
+            const attrFilters = [
+                { name: 'Strength', icon: '/assets/attr/attribute/str.svg', color: '#dc2626' },
+                { name: 'Agility', icon: '/assets/attr/attribute/agi.svg', color: '#16a34a' },
+                { name: 'Intelligence', icon: '/assets/attr/attribute/int.svg', color: '#2563eb' }
+            ];
+
+            attrFilters.forEach(attr => {
                 const btn = document.createElement('button');
-                btn.innerText = filter;
-                btn.className = `filter-btn ${this.currentFilter === filter ? 'active' : ''}`;
-                btn.addEventListener('click', () => this.setFilter(filter));
-                filterBar.appendChild(btn);
-            });
-
-            // Isolate styles
-            const style = document.createElement('style');
-            style.innerText = `
-                .filter-btn {
-                    background: linear-gradient(180deg, #8b6542 0%, #5c3d25 100%);
-                    color: #d4b896;
-                    border: 2px solid #3d2815;
-                    padding: 10px 28px;
-                    border-radius: 22px;
+                const isActive = this.currentFilter === attr.name;
+                btn.style.cssText = `
+                    display: flex; align-items: center; gap: 6px;
+                    background: ${isActive
+                        ? `linear-gradient(180deg, ${attr.color}cc 0%, ${attr.color}99 100%)`
+                        : 'linear-gradient(180deg, #8b6542 0%, #5c3d25 100%)'};
+                    color: #fff;
+                    border: 2px solid ${isActive ? attr.color : '#3d2815'};
+                    padding: 8px 14px;
+                    border-radius: 20px;
                     cursor: pointer;
                     font-family: 'SF Pro Rounded', sans-serif;
-                    font-size: 0.9rem;
-                    font-weight: 700;
+                    font-size: 0.8rem;
+                    font-weight: 600;
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-                    transition: all 0.3s ease;
+                    transition: all 0.2s ease;
                     pointer-events: auto;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-                .filter-btn:hover {
-                    background: linear-gradient(180deg, #9a6e48 0%, #6b4830 100%);
-                }
-                .filter-btn.active {
-                    background: linear-gradient(180deg, #c9a66b 0%, #8b6542 100%);
-                    color: #3d2815;
-                    font-weight: bold;
-                    border-color: #dec88f;
-                    box-shadow: 0 0 10px rgba(222, 200, 143, 0.5);
-                }
-            `;
-            filterBar.appendChild(style);
+                    box-shadow: ${isActive ? `0 0 12px ${attr.color}66` : 'none'};
+                `;
+                btn.innerHTML = `
+                    <img src="${attr.icon}" style="width: 18px; height: 18px; filter: brightness(0) invert(1);" />
+                    <span>${attr.name.substring(0, 3).toUpperCase()}</span>
+                `;
+                btn.addEventListener('click', () => this.setFilter(attr.name));
+                btn.onmouseenter = () => {
+                    if (this.currentFilter !== attr.name) {
+                        btn.style.background = `linear-gradient(180deg, ${attr.color}88 0%, ${attr.color}66 100%)`;
+                        btn.style.borderColor = attr.color;
+                    }
+                };
+                btn.onmouseleave = () => {
+                    if (this.currentFilter !== attr.name) {
+                        btn.style.background = 'linear-gradient(180deg, #8b6542 0%, #5c3d25 100%)';
+                        btn.style.borderColor = '#3d2815';
+                    }
+                };
+                attrGroup.appendChild(btn);
+            });
+            filterBar.appendChild(attrGroup);
+
+            // RIGHT SIDE: Sort Buttons
+            const sortGroup = document.createElement('div');
+            sortGroup.style.cssText = `display: flex; gap: 6px; align-items: center;`;
+
+            const sortOptions = [
+                { icon: '⭐', label: 'Star', value: 'Star', tooltip: 'Sort by Stars' },
+                { icon: '📊', label: 'Level', value: 'Level', tooltip: 'Sort by Level' },
+                { icon: '⚔️', label: 'Power', value: 'Power', tooltip: 'Sort by Combat Power' },
+                { icon: '🐾', label: 'Species', value: 'Species', tooltip: 'Sort by Species' },
+                { icon: '✨', label: 'Mythic', value: 'Mythic', tooltip: 'Mythic First' }
+            ];
+
+            sortOptions.forEach(sort => {
+                const btn = document.createElement('button');
+                const isActive = this.currentSort.includes(sort.value);
+                const isDesc = this.currentSort === sort.value + ' ↓';
+                btn.title = sort.tooltip;
+                btn.style.cssText = `
+                    display: flex; align-items: center; justify-content: center; gap: 5px;
+                    background: ${isActive ? 'linear-gradient(180deg, #c9a66b 0%, #8b6542 100%)' : 'linear-gradient(180deg, #8b6542 0%, #5c3d25 100%)'};
+                    color: ${isActive ? '#3d2815' : '#fff'};
+                    border: 2px solid ${isActive ? '#dec88f' : '#3d2815'};
+                    padding: 8px 12px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-family: 'SF Pro Rounded', sans-serif;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    transition: all 0.2s ease;
+                    pointer-events: auto;
+                    box-shadow: ${isActive ? '0 0 10px rgba(222, 200, 143, 0.5)' : 'none'};
+                `;
+                btn.innerHTML = `<span style="font-size: 1rem;">${sort.icon}</span> ${sort.label}${isActive ? (isDesc ? ' ↓' : ' ↑') : ''}`;
+                btn.addEventListener('click', () => {
+                    // Toggle between ascending and descending, or activate
+                    if (this.currentSort === sort.value + ' ↓') {
+                        this.currentSort = sort.value + ' ↑';
+                    } else if (this.currentSort === sort.value + ' ↑') {
+                        this.currentSort = ''; // Reset
+                    } else {
+                        this.currentSort = sort.value + ' ↓';
+                    }
+                    this.sortHeroes(this.currentSort);
+                });
+                btn.onmouseenter = () => {
+                    if (!isActive) btn.style.background = 'linear-gradient(180deg, #9a6e48 0%, #6b4830 100%)';
+                };
+                btn.onmouseleave = () => {
+                    if (!isActive) btn.style.background = 'linear-gradient(180deg, #8b6542 0%, #5c3d25 100%)';
+                };
+                sortGroup.appendChild(btn);
+            });
+            filterBar.appendChild(sortGroup);
+
             this.container.appendChild(filterBar);
         }
 

@@ -228,7 +228,8 @@ function getHeroManager(heroCodeName: string, heroData: any): HeroProgressionMan
         level: heroData.level,
         currentRankIndex: heroData.currentRankIndex || 0,
         experience: heroData.experience || 0,
-        skillLevels: heroData.skillLevels || {}
+        skillLevels: heroData.skillLevels || {},
+        equipment: heroData.equipment || new Array(9).fill(null)
     } : undefined;
 
     if (nameLower.includes('ranger') || nameLower.includes('sable')) {
@@ -856,6 +857,73 @@ app.post('/api/hero/merge', async (req, res) => {
 
     } catch (error) {
         console.error("Merge Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// EQUIP ITEM Endpoint
+app.post('/api/hero/equip', async (req, res) => {
+    try {
+        const { commanderName, instanceId, slotIndex, itemId } = req.body;
+        // Check slotIndex is number
+        if (!commanderName || !instanceId || slotIndex === undefined) {
+            return res.status(400).json({ message: 'Missing fields' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+            return res.status(404).json({ message: 'Hero instance not found' });
+        }
+
+        const hero = userAny.heroes.get(instanceId);
+        if (!hero.equipment) hero.equipment = new Array(9).fill(null);
+
+        // Validation for ItemId (if equipping)
+        if (itemId) {
+            const inventory = user.inventory || new Map();
+            const count = inventory.get(itemId) || 0;
+            if (count < 1) {
+                return res.status(400).json({ message: 'Item not in inventory' });
+            }
+
+            // Unequip current if exists
+            const currentItem = hero.equipment[slotIndex];
+            if (currentItem) {
+                inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
+            }
+
+            // Deduct new item
+            inventory.set(itemId, count - 1);
+            // if (inventory.get(itemId) === 0) inventory.delete(itemId); 
+            // Keeping 0 is safer for now to avoid undefined checks elsewhere if logic relies on key existence
+
+            // Equip new item
+            hero.equipment[slotIndex] = itemId;
+            user.inventory = inventory; // Trigger update
+        } else {
+            // Unequip logic
+            const currentItem = hero.equipment[slotIndex];
+            if (currentItem) {
+                const inventory = user.inventory || new Map();
+                inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
+                hero.equipment[slotIndex] = null;
+                user.inventory = inventory;
+            }
+        }
+
+        userAny.heroes.set(instanceId, hero);
+        user.markModified('heroes');
+        user.markModified('inventory');
+        await user.save();
+
+        console.log(`[Equip] ${commanderName} updated slot ${slotIndex} on ${instanceId} with ${itemId || 'Empty'}`);
+        res.json({ success: true, user: sanitizeUser(user) });
+
+    } catch (error) {
+        console.error("Equip Error:", error);
         res.status(500).json({ message: (error as Error).message });
     }
 });
