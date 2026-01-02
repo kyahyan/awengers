@@ -1,6 +1,6 @@
 import { HeroAssetConfig, HERO_ASSETS } from '../data/HeroAssetsMap';
 import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition, HeroInstance } from '../data/HeroProgression';
-import { ITEMS } from '../data/Items';
+import { ITEMS, ALL_ITEMS } from '../data/Items';
 
 export class HeroUpgradeModal {
     private backdrop: HTMLElement;
@@ -188,22 +188,7 @@ export class HeroUpgradeModal {
         const isAtCap = this.heroManager.isAtLevelCap();
         const needsEvolution = isAtCap && currentMilestone?.starRequirement && heroStars < currentMilestone.starRequirement;
 
-        // Close Button
-        const closeBtn = document.createElement('div');
-        closeBtn.innerText = '✕';
-        closeBtn.style.cssText = `
-            position: absolute;
-            top: 20px;
-            right: 25px;
-            font-size: 1.8rem;
-            color: rgba(255,255,255,0.4);
-            cursor: pointer;
-            transition: all 0.2s;
-            z-index: 100000;
-            pointer-events: auto;
-        `;
-        closeBtn.onclick = () => this.backdrop.click();
-        this.container.appendChild(closeBtn);
+
 
 
         // === LEFT PANEL - Hero Info & Upgrade ===
@@ -625,14 +610,19 @@ export class HeroUpgradeModal {
                 this.renderMergePanel(rightPanel, currentMilestone, heroStars);
             } else if (isAtCap && !needsEvolution) {
                 // Max Rank or no further evolution needed at this cap
-                rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">Max Evolution Reached for now.</div>`;
+                const msg = document.createElement('div');
+                msg.style.cssText = "text-align: center; color: #6b7280; margin-top: 50px;";
+                msg.innerText = "Max Evolution Reached for now.";
+                rightPanel.appendChild(msg);
             } else {
                 // Not at cap - Find the next star-gated milestone the hero hasn't reached yet
                 const nextStarGatedMilestone = config.rankUpMilestones.find(m => m.starRequirement && heroLevel < m.levelCap);
                 const targetCap = nextStarGatedMilestone?.levelCap || currentLevelCap;
-                rightPanel.innerHTML += `<div style="text-align: center; color: #6b7280; margin-top: 50px;">
-                    <div>Level up to ${targetCap} to unlock evolution.</div>
-                 </div>`;
+
+                const msg = document.createElement('div');
+                msg.style.cssText = "text-align: center; color: #6b7280; margin-top: 50px;";
+                msg.innerHTML = `<div>Level up to ${targetCap} to unlock evolution.</div>`;
+                rightPanel.appendChild(msg);
             }
         }
 
@@ -1683,107 +1673,302 @@ export class HeroUpgradeModal {
     }
 
     private openEquipmentSelection(slotIndex: number) {
-        // Create modal overlay
+        // Create fullscreen modal overlay
         const overlay = document.createElement('div');
         overlay.style.cssText = `
-                position: absolute; inset: 0; background: rgba(0,0,0,0.95); 
-                z-index: 20; display: flex; flex-direction: column; padding: 20px;
-            `;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); 
+            z-index: 100010; display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px);
+        `;
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-        // Check inventory for equipment
-        const inventory = this.user.inventory || {};
-        const items: { id: string, count: number }[] = [];
-
-        // Handle Map vs Object
-        if (this.user.inventory instanceof Map) {
-            // If Map (shouldn't be in frontend typically unless serialized oddly, but legacy check)
-            // Frontend usually receives object from JSON.
-        }
-        // Assume Object if not Map, or check
-        // The sanitize helper returns object for inventory.
-        if (inventory && typeof inventory === 'object') {
-            Object.entries(inventory).forEach(([key, val]) => items.push({ id: key, count: val as number }));
-        }
-
-        const equipmentItems = items.filter(i => {
-            const def = ITEMS[i.id];
-            return def && def.type === 'equipment' && i.count > 0;
-        });
+        // Modal container
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px; padding: 30px; width: 90%; max-width: 700px;
+            max-height: 80vh; display: flex; flex-direction: column;
+            border: 2px solid rgba(255,255,255,0.1);
+            box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+        `;
 
         // Header
         const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        `;
         header.innerHTML = `
-                <div style="font-weight: bold; font-size: 1.2rem; margin-bottom: 20px; color: #fff;">Select Equipment (Slot ${slotIndex + 1})</div>
-            `;
-        overlay.appendChild(header);
+            <div style="font-weight: bold; font-size: 1.4rem; color: #fff;">
+                Select Equipment <span style="color: #fbbf24;">(Slot ${slotIndex + 1})</span>
+            </div>
+            <button id="close-equip-modal" style="
+                background: none; border: none; color: #888; font-size: 1.8rem;
+                cursor: pointer; transition: color 0.2s; line-height: 1;
+            ">×</button>
+        `;
+        modal.appendChild(header);
+
+        // Check inventory for equipment - prioritize equipmentInventory
+        const equipmentItems: { itemId: string; stars: number; index: number }[] = [];
+
+        if (this.user.equipmentInventory && this.user.equipmentInventory.length > 0) {
+            this.user.equipmentInventory.forEach((eq: { itemId: string; stars: number; equipped?: boolean }, idx: number) => {
+                const def = ITEMS[eq.itemId];
+                if (def && def.type === 'equipment' && !eq.equipped) {
+                    equipmentItems.push({ itemId: eq.itemId, stars: eq.stars || 0, index: idx });
+                }
+            });
+        } else {
+            // Fallback to legacy inventory
+            const inventory = this.user.inventory || {};
+            if (inventory && typeof inventory === 'object') {
+                Object.entries(inventory).forEach(([key, val]) => {
+                    const def = ITEMS[key];
+                    if (def && def.type === 'equipment' && (val as number) > 0) {
+                        for (let i = 0; i < (val as number); i++) {
+                            equipmentItems.push({ itemId: key, stars: 0, index: -1 });
+                        }
+                    }
+                });
+            }
+        }
+
+        // Content area
+        const content = document.createElement('div');
+        content.style.cssText = `flex: 1; overflow-y: auto; padding-right: 10px;`;
 
         if (equipmentItems.length === 0) {
-            const emptyMsg = document.createElement('div');
-            emptyMsg.innerText = "No equipment available in items.";
-            emptyMsg.style.color = '#888';
-            overlay.appendChild(emptyMsg);
+            content.innerHTML = `
+                <div style="
+                    display: flex; flex-direction: column; align-items: center;
+                    justify-content: center; height: 200px; color: #6b7280;
+                ">
+                    <div style="font-size: 4rem; margin-bottom: 15px;">📦</div>
+                    <div style="font-size: 1.2rem;">No equipment available</div>
+                    <div style="font-size: 0.9rem; margin-top: 5px; color: #4b5563;">
+                        Obtain items from Adventure or the Shop
+                    </div>
+                </div>
+            `;
         } else {
-            // List Container
-            const list = document.createElement('div');
-            list.style.cssText = `flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-content: start;`;
+            // Sort bar
+            const sortBar = document.createElement('div');
+            sortBar.style.cssText = `
+                display: flex; gap: 10px; align-items: center;
+                margin-bottom: 15px; padding-bottom: 15px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            `;
+            sortBar.innerHTML = `
+                <span style="color: #9ca3af; font-size: 0.9rem;">Sort:</span>
+            `;
 
-            equipmentItems.forEach(item => {
-                const def = ITEMS[item.id];
-                const el = document.createElement('div');
-                el.style.cssText = `
-                        aspect-ratio: 1; border: 1px solid #444; border-radius: 8px; 
-                        background: rgba(40,40,40,0.8); cursor: pointer; display: flex; align-items: center; justify-content: center;
-                        position: relative;
-                     `;
-                el.innerHTML = `
-                    <div style="position: absolute; top: 2px; right: 4px; font-size: 0.7rem; color: #aaa;">x${item.count}</div>
-                    <img src="${def.icon}" style="width: 70%; height: 70%; object-fit: contain;">
+            let currentSort: 'tier' | 'stars' = 'tier';
+
+            const createSortBtn = (label: string, sortType: 'tier' | 'stars', isActive: boolean) => {
+                const btn = document.createElement('button');
+                btn.innerText = label;
+                btn.style.cssText = `
+                    padding: 8px 16px; font-size: 0.85rem; font-weight: 600;
+                    background: ${isActive ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'rgba(255,255,255,0.1)'};
+                    border: 1px solid ${isActive ? '#3b82f6' : 'rgba(255,255,255,0.2)'};
+                    border-radius: 8px; color: #fff;
+                    cursor: pointer; transition: all 0.2s;
                 `;
-                el.onclick = () => {
-                    this.handleEquip(slotIndex, item.id);
-                    overlay.remove();
+                btn.onclick = () => {
+                    currentSort = sortType;
+                    renderItems();
                 };
-                el.title = `${def.name}`;
-                list.appendChild(el);
-            });
-            overlay.appendChild(list);
+                return btn;
+            };
+
+            sortBar.appendChild(createSortBtn('★ Stars', 'stars', false));
+            sortBar.appendChild(createSortBtn('Tier', 'tier', true));
+            content.appendChild(sortBar);
+
+            // Equipment grid
+            const grid = document.createElement('div');
+            grid.style.cssText = `
+                display: grid; 
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+                gap: 15px;
+            `;
+
+            const renderItems = () => {
+                grid.innerHTML = '';
+
+                // Sort items
+                const sortedItems = [...equipmentItems].sort((a, b) => {
+                    const defA = ITEMS[a.itemId];
+                    const defB = ITEMS[b.itemId];
+                    if (!defA || !defB) return 0;
+
+                    if (currentSort === 'stars') {
+                        return b.stars - a.stars; // Higher stars first
+                    } else {
+                        // Tier sort - use ALL_ITEMS for tier info
+                        const fullDefA = ALL_ITEMS[a.itemId];
+                        const fullDefB = ALL_ITEMS[b.itemId];
+                        const tierA = fullDefA ? fullDefA.tier : 1;
+                        const tierB = fullDefB ? fullDefB.tier : 1;
+                        return tierB - tierA;
+                    }
+                });
+
+                // Update sort button styles
+                const buttons = sortBar.querySelectorAll('button');
+                buttons.forEach((btn, idx) => {
+                    const isActive = (idx === 0 && currentSort === 'stars') || (idx === 1 && currentSort === 'tier');
+                    (btn as HTMLButtonElement).style.background = isActive
+                        ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                        : 'rgba(255,255,255,0.1)';
+                    (btn as HTMLButtonElement).style.borderColor = isActive ? '#3b82f6' : 'rgba(255,255,255,0.2)';
+                });
+
+                sortedItems.forEach((item) => {
+                    const def = ITEMS[item.itemId];
+                    if (!def) return;
+
+                    const card = document.createElement('div');
+                    card.style.cssText = `
+                    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+                    border: 2px solid rgba(255,255,255,0.15);
+                    border-radius: 16px; padding: 15px; cursor: pointer;
+                    transition: all 0.2s ease; display: flex; flex-direction: column;
+                    align-items: center; gap: 10px;
+                `;
+
+                    // Star display
+                    const starCount = item.stars || 0;
+                    let starsHtml = '';
+                    for (let s = 0; s < 5; s++) {
+                        if (s < starCount) {
+                            starsHtml += `<span style="color: #fbbf24; font-size: 0.8rem;">★</span>`;
+                        } else {
+                            starsHtml += `<span style="color: #4b5563; font-size: 0.8rem;">☆</span>`;
+                        }
+                    }
+
+                    // Get item stats for tooltip
+                    const statsText = def.stats ? Object.entries(def.stats)
+                        .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: +${v}`)
+                        .join('\n') : 'No stats';
+
+                    card.innerHTML = `
+                    <div style="
+                        width: 80px; height: 80px; 
+                        background: rgba(0,0,0,0.4); border-radius: 12px;
+                        display: flex; align-items: center; justify-content: center;
+                        border: 1px solid rgba(255,255,255,0.1);
+                    ">
+                        <img src="${def.icon}" style="
+                            width: 70%; height: 70%; object-fit: contain;
+                            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+                        ">
+                    </div>
+                    <div style="display: flex; gap: 1px;">${starsHtml}</div>
+                    <div style="
+                        color: #fff; font-weight: 600; font-size: 0.9rem;
+                        text-align: center; line-height: 1.2;
+                    ">${def.name}</div>
+                    <div style="
+                        color: #9ca3af; font-size: 0.75rem; text-align: center;
+                    ">${def.description}</div>
+                `;
+
+                    card.title = `${def.name}\n\n${statsText}`;
+
+                    card.onmouseenter = () => {
+                        card.style.transform = 'translateY(-5px)';
+                        card.style.borderColor = '#fbbf24';
+                        card.style.background = 'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(251,191,36,0.05) 100%)';
+                        card.style.boxShadow = '0 10px 30px rgba(251,191,36,0.2)';
+                    };
+                    card.onmouseleave = () => {
+                        card.style.transform = 'translateY(0)';
+                        card.style.borderColor = 'rgba(255,255,255,0.15)';
+                        card.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)';
+                        card.style.boxShadow = 'none';
+                    };
+                    card.onclick = () => {
+                        this.handleEquip(slotIndex, item.itemId);
+                        overlay.remove();
+                    };
+
+                    grid.appendChild(card);
+                });
+
+                content.appendChild(grid);
+            };
+
+            // Initial render
+            content.appendChild(grid);
+            renderItems();
         }
+
+        modal.appendChild(content);
 
         // Action Buttons
         const btnContainer = document.createElement('div');
-        btnContainer.style.marginTop = 'auto';
-        btnContainer.style.display = 'flex';
-        btnContainer.style.gap = '10px';
+        btnContainer.style.cssText = `
+            display: flex; gap: 15px; margin-top: 20px;
+            padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);
+        `;
 
         // Unequip Button
         const unequipBtn = document.createElement('button');
-        unequipBtn.innerText = "Unequip Slot";
-        unequipBtn.style.cssText = `flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;`;
+        unequipBtn.innerText = "UNEQUIP SLOT";
+        unequipBtn.style.cssText = `
+            flex: 1; padding: 15px; font-size: 1rem; font-weight: bold;
+            background: linear-gradient(to bottom, #ef4444, #dc2626);
+            border: none; border-radius: 12px; color: white;
+            cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 4px 0 #991b1b;
+        `;
+        unequipBtn.onmouseenter = () => { unequipBtn.style.filter = 'brightness(1.1)'; };
+        unequipBtn.onmouseleave = () => { unequipBtn.style.filter = 'brightness(1)'; };
+        unequipBtn.onmousedown = () => {
+            unequipBtn.style.transform = 'translateY(4px)';
+            unequipBtn.style.boxShadow = '0 0 0 #991b1b';
+        };
+        unequipBtn.onmouseup = () => {
+            unequipBtn.style.transform = 'translateY(0)';
+            unequipBtn.style.boxShadow = '0 4px 0 #991b1b';
+        };
         unequipBtn.onclick = () => {
             this.handleEquip(slotIndex, null);
             overlay.remove();
         };
 
-        // Close Button
-        const closeBtn = document.createElement('button');
-        closeBtn.innerText = "Cancel";
-        closeBtn.style.cssText = `flex: 1; padding: 12px; background: #555; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;`;
-        closeBtn.onclick = () => overlay.remove();
+        // Cancel Button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerText = "CANCEL";
+        cancelBtn.style.cssText = `
+            flex: 1; padding: 15px; font-size: 1rem; font-weight: bold;
+            background: linear-gradient(to bottom, #4b5563, #374151);
+            border: none; border-radius: 12px; color: #d1d5db;
+            cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 4px 0 #1f2937;
+        `;
+        cancelBtn.onmouseenter = () => { cancelBtn.style.filter = 'brightness(1.2)'; };
+        cancelBtn.onmouseleave = () => { cancelBtn.style.filter = 'brightness(1)'; };
+        cancelBtn.onclick = () => overlay.remove();
 
         btnContainer.appendChild(unequipBtn);
-        btnContainer.appendChild(closeBtn);
-        overlay.appendChild(btnContainer);
+        btnContainer.appendChild(cancelBtn);
+        modal.appendChild(btnContainer);
 
-        // We append to local right panel or main container?
-        // Right Panel is small (380px). List might be cramped but okay.
-        // Let's modify render open logic to append to the RIGHT PANEL container specifically so it covers it.
-        // But renderEquipmentPanel argument `container` is the right panel.
-        // I don't have reference to it here easily unless I store it or pass it.
-        // But `this.container` is the main modal.
-        // If I append to `this.container` it covers the whole screen? No, `this.container` is the modal box.
-        // Let's append to `this.container` but maybe style it to overlay the right side?
-        // Or simpler: just cover the modal.
-        this.container.appendChild(overlay);
+        // Close button handler
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const closeBtn = modal.querySelector('#close-equip-modal') as HTMLElement;
+        if (closeBtn) {
+            closeBtn.onmouseenter = () => { closeBtn.style.color = '#fff'; };
+            closeBtn.onmouseleave = () => { closeBtn.style.color = '#888'; };
+            closeBtn.onclick = () => overlay.remove();
+        }
     }
 
     private async handleEquip(slotIndex: number, itemId: string | null) {

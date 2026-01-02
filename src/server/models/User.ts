@@ -50,8 +50,26 @@ const userSchema = new mongoose.Schema({
     // Persistent Hero Data (Level, Rank, Skills)
     heroes: { type: Map, of: Object, default: {} },
 
-    // Inventory
+    // Inventory (legacy format: itemId -> count)
     inventory: { type: Map, of: Number, default: {} },
+
+    // Equipment Inventory (new format with star levels)
+    equipmentInventory: [{
+        itemId: { type: String, required: true },
+        stars: { type: Number, default: 0 },
+        equipped: { type: Boolean, default: false },
+        heroId: { type: String }
+    }],
+
+    // Polishing Powder for enhancement
+    polishingPowder: { type: Number, default: 0 },
+
+    // Adventure Progress
+    adventureProgress: {
+        jadeLotusShrine: {
+            maxStage: { type: Number, default: 1 }
+        }
+    },
 
     // Deployed Team (Array of instanceIds)
     deployedTeam: [{ type: String }]

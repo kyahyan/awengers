@@ -1,5 +1,6 @@
 import { HERO_ASSETS, HeroSpriteConfig } from '../data/HeroAssetsMap';
 import { EnemyDefinition, getEnemyById, getEnemyStatsForLevel } from '../data/EnemyDefinitions';
+import { calculateLoot, LootReward } from '../data/LootSystem';
 
 const FPS = 30;
 const MAX_AP = 10000;
@@ -124,46 +125,73 @@ interface BattleEntity {
     passiveCharges: number; // Mage
     skillIcons: string[];
     isMelee: boolean;
+    // Battle stats tracking
+    battleStats: { damageDealt: number; healing: number; damageTaken: number; };
 }
 
 export class BattleArenaUI {
     private container: HTMLElement;
     private loadingScreen: HTMLElement | null = null;
     private arenaScreen: HTMLElement | null = null;
-    private onClose: () => void;
-    private heroAssetName: string;
+    // private onClose: () => void; // Defined in constructor
+
+    private teamInfo: { name: string, level: number, instanceId: string, stars: number }[];
     private enemyId: string;
     private stageLevel: number;
 
-    private hero: BattleEntity | null = null;
-    private enemy: BattleEntity | null = null;
+    private heroes: BattleEntity[] = [];
+    private enemies: BattleEntity[] = [];
 
     // Core Logic
-    private battleSpeed: number = 2;
+    private battleSpeed = 2;
+    private isAuto: boolean = false;
     private isPaused: boolean = false;
     private isAnimatingAction: boolean = false;
     private battleLoopId: number | null = null;
     private lastTick: number = 0;
+    private frameCount: number = 0; // For throttling UI updates
+    private isBattleStarted = false; // New flag
 
     // HUD
     private skillBtns: HTMLElement[] = [];
-    private speedBtn: HTMLElement | null = null;
+    private speedBtn!: HTMLElement;
+    private autoBtn!: HTMLElement;
+    private startBtn!: HTMLElement; // New button
     private activeTooltip: HTMLElement | null = null;
-    private battleLog: HTMLElement | null = null;
+    private dataModal: HTMLElement | null = null;
+    private dataModalActiveTab: 'damage' | 'treatment' | 'damageTaken' = 'damage';
 
     private static NAME_ALIASES: Record<string, string> = {
         'Oryx': 'Antelope Mage',
         'Sable': 'Antelope Ranger',
+        'Razor': 'Razor',
         // Fallbacks for safety
         'Mage': 'Antelope Mage',
         'Ranger': 'Antelope Ranger'
     };
 
-    constructor(heroAssetName: string, onClose: () => void, enemyId: string = 'treant', stageLevel: number = 10) {
-        this.heroAssetName = BattleArenaUI.NAME_ALIASES[heroAssetName] || heroAssetName;
+    constructor(
+        teamInfo: { name: string, level: number, instanceId: string, stars: number }[],
+        private onClose: () => void,
+        private onComplete?: (result: { win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number }) => void,
+        enemyId: string = 'treant',
+        stageLevel: number = 10,
+        initialAutoState: boolean = false,
+        private mapId: number = 1,
+        private isFirstClear: boolean = false,
+        initialSpeed: number = 2 // New arg
+    ) {
+        this.teamInfo = teamInfo.map(h => ({
+            ...h,
+            name: BattleArenaUI.NAME_ALIASES[h.name] || h.name
+        }));
+        console.log('[BattleArenaUI] Constructor teamInfo:', this.teamInfo);
         this.enemyId = enemyId;
         this.stageLevel = stageLevel;
         this.onClose = onClose;
+        this.onComplete = onComplete;
+        this.isAuto = initialAutoState; // Set initial state
+        this.battleSpeed = initialSpeed; // Set initial speed
         this.container = document.createElement('div');
         this.container.style.cssText = `position: fixed; inset: 0; width: 100%; height: 100%; z-index: 100000; background: #000;`;
         this.showLoadingScreen();
@@ -190,22 +218,32 @@ export class BattleArenaUI {
 
     private async preloadAssets() {
         try {
-            const configLeft = HERO_ASSETS.find(h => h.name === `${this.heroAssetName} Left`);
-            const enemyName = this.heroAssetName === 'Antelope Mage' ? 'Antelope Ranger' : 'Antelope Mage';
-            const configRight = HERO_ASSETS.find(h => h.name === enemyName);
-
             const assetsToLoad: string[] = [];
             const addAnimPaths = (basePath: string) => { if (basePath) Object.keys(ANIM_FRAMES).forEach(anim => assetsToLoad.push(basePath.replace('idle', anim))); };
 
-            if (configLeft?.sprite2D) addAnimPaths(configLeft.sprite2D.spritesheetPath);
-            if (configRight?.sprite2D) addAnimPaths(configRight.sprite2D.spritesheetPath);
+            // Preload all heroes
+            // Preload all heroes
+            this.teamInfo.forEach(heroInfo => {
+                const name = heroInfo.name;
+                const configLeft = HERO_ASSETS.find(h => h.name === `${name} Left`);
+                if (configLeft?.sprite2D) {
+                    const spritePath = configLeft.sprite2D.spritesheetPath;
+                    addAnimPaths(spritePath);
+                    const heroId = ASSET_TO_HERO_ID[name] || name;
+                    const heroData = HERO_DATA[heroId];
+                    if (heroData && heroData.skillIcons) {
+                        heroData.skillIcons.forEach((icon: string) => {
+                            const parts = spritePath.split('/');
+                            if (parts.length > 4) assetsToLoad.push(`${parts.slice(0, 4).join('/')}/skills/${icon}`);
+                        });
+                    }
+                }
+            });
 
-            const heroId = ASSET_TO_HERO_ID[this.heroAssetName];
-            const heroData = HERO_DATA[heroId];
-            if (configLeft?.sprite2D?.spritesheetPath && heroData) {
-                const parts = configLeft.sprite2D.spritesheetPath.split('/');
-                if (parts.length > 4) heroData.skillIcons.forEach((icon: string) => assetsToLoad.push(`${parts.slice(0, 4).join('/')}/skills/${icon}`));
-            }
+            // Preload Enemy (heuristic as before)
+            // Just load standard enemy if possible or fallback
+            // For now, simpler enemy preloading logic from original code or just skip explicitly for "enemyName"
+
 
             if (assetsToLoad.length === 0) return;
             const loadPromises = assetsToLoad.map(src => new Promise<void>((resolve) => {
@@ -223,7 +261,7 @@ export class BattleArenaUI {
         if (this.loadingScreen) { this.loadingScreen.remove(); this.loadingScreen = null; }
 
         this.arenaScreen = document.createElement('div');
-        this.arenaScreen.style.cssText = `position: absolute; inset: 0; background: url('/assets/Background/arena.jpg') center/cover;`;
+        this.arenaScreen.style.cssText = `position: absolute; inset: 0; background: url('/assets/Background/arena2.png') center/cover;`;
         this.arenaScreen.appendChild(Object.assign(document.createElement('div'), { style: `position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4);` }));
 
         const battleContainer = document.createElement('div');
@@ -234,42 +272,75 @@ export class BattleArenaUI {
             }
         };
 
-        const heroConfigLeft = HERO_ASSETS.find(h => h.name === `${this.heroAssetName} Left`);
+        // Create Heroes
+        this.heroes = [];
+        this.teamInfo.forEach((heroInfo, index) => {
+            const name = heroInfo.name;
+            console.log(`[BattleArenaUI] Attempting to spawn hero: "${name}"`);
 
-        // Get enemy from definitions
-        const enemyDef = getEnemyById(this.enemyId);
+            // HEROES (Left Side) -> Use side-left sprites (facing right toward enemies)
+            const heroConfig = HERO_ASSETS.find(h => h.name === name);
 
-        if (heroConfigLeft?.sprite2D) {
-            this.hero = this.createBattleEntity('hero', this.heroAssetName, '250', '#22c55e', heroConfigLeft.sprite2D);
-            Object.assign(this.hero.element.style, { position: 'absolute', bottom: '25%', left: '25%' });
-            battleContainer.appendChild(this.hero.element);
-            this.playAnim(this.hero, 'idle');
+            if (!heroConfig) console.warn(`[BattleArenaUI] Config not found for "${name}"`);
+            if (heroConfig?.sprite2D) {
+                // Use actual level from heroInfo
+                const levelStr = String(heroInfo.level);
+                const hero = this.createBattleEntity('hero', name, levelStr, '#22c55e', heroConfig.sprite2D);
 
-            // Create enemy entity from enemy definition
-            if (enemyDef) {
-                this.enemy = this.createEnemyEntity(enemyDef, this.stageLevel);
-            } else {
-                // Fallback to hero as enemy
-                const enemyName = this.heroAssetName === 'Antelope Mage' ? 'Antelope Ranger' : 'Antelope Mage';
-                const configRight = HERO_ASSETS.find(h => h.name === enemyName);
-                if (configRight?.sprite2D) {
-                    this.enemy = this.createBattleEntity('enemy', enemyName, String(this.stageLevel), '#ef4444', configRight.sprite2D);
-                }
+                // Positioning will be handled after loop or inside via setIsometricPosition
+                // We will defer positioning until all are created or do it here.
+                // Refactor to use setIsometricPosition logic below.
+
+                battleContainer.appendChild(hero.element);
+                this.playAnim(hero, 'idle');
+                this.heroes.push(hero);
             }
+        });
 
-            if (this.enemy) {
-                Object.assign(this.enemy.element.style, { position: 'absolute', top: '35%', right: '25%' });
-                battleContainer.appendChild(this.enemy.element);
-                this.playEnemyAnim(this.enemy, 'idle');
+        // SEE MULTI-REPLACE CHUNK 2 for Enemy Logic insertion here
+
+
+        // Create Enemies (Mock 6-hero team)
+        this.enemies = [];
+        // Use asset names for the enemy team (matching HeroAssetsMap entries)
+        const mockEnemyNames = ['Antelope Mage', 'Antelope Ranger', 'Razor', 'Antelope Mage', 'Antelope Ranger', 'Razor'];
+
+        mockEnemyNames.forEach((name, index) => {
+            // ENEMIES (Right Side) -> Use "...Left" asset which now has side-right sprites (facing left toward heroes)
+            const heroConfig = HERO_ASSETS.find(h => h.name === `${name} Left`);
+
+            if (heroConfig?.sprite2D) {
+                // Enemies at same level as stage for now, or scaled
+                const levelStr = String(this.stageLevel);
+                const enemy = this.createBattleEntity('enemy', name, levelStr, '#ef4444', heroConfig.sprite2D);
+
+                // Isometric Position: Right Side
+                const isPlayer = false;
+                this.setIsometricPosition(enemy.element, index, isPlayer);
+
+                battleContainer.appendChild(enemy.element);
+                // Enemy animation mapping: idle is 'idle'
+                this.playAnim(enemy, 'idle');
+
+                // NO SCALE FLIP for enemies (Using native Left asset)
+
+                this.enemies.push(enemy);
             }
+        });
 
+        // Isometric Position: Player Side update
+        this.heroes.forEach((h, i) => {
+            this.setIsometricPosition(h.element, i, true);
+        });
+
+        if (this.heroes.length > 0) {
             this.createHUD(battleContainer);
-            this.createBattleLog(battleContainer);
-            this.createStatsPanel(battleContainer);
+            this.createDataButton(battleContainer);
 
             this.lastTick = performance.now();
             this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
         }
+
         this.arenaScreen.appendChild(battleContainer);
 
         const exitBtn = document.createElement('button');
@@ -279,40 +350,84 @@ export class BattleArenaUI {
         this.arenaScreen.appendChild(exitBtn);
 
         this.arenaScreen.appendChild(document.createElement('style')).textContent = `
-            @keyframes floatUpFade { 0% { transform: translateY(0); opacity: 0; } 20% { transform: translateY(-20px); opacity: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
-            @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-            .floating-damage { position: absolute; font-family: 'SF Pro Display'; font-weight: 900; color: #fff; text-shadow: 0 0 5px #000; animation: floatUpFade 1s forwards; z-index: 1000; font-size: 2rem; }
+            @keyframes floatUpFade { 0% { transform: translate3d(0,0,0); opacity: 0; } 20% { transform: translate3d(0,-20px,0); opacity: 1; } 100% { transform: translate3d(0,-60px,0); opacity: 0; } }
+            @keyframes fadeInUp { from { opacity: 0; transform: translate3d(0,10px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+            @keyframes modalFadeIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+            .floating-damage { position: absolute; font-family: 'SF Pro Display'; font-weight: 900; color: #fff; text-shadow: 0 0 5px #000; animation: floatUpFade 1s forwards cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 1000; font-size: 2rem; will-change: transform, opacity; }
             .hud-btn { transition: transform 0.1s; cursor: pointer; }
             .hud-btn:active { transform: scale(0.95); }
-            .battle-log { position: absolute; top: 100px; left: 30px; width: 350px; height: 200px; background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 100%); border-left: 4px solid #fbbf24; border-radius: 4px; padding: 15px; overflow-y: auto; font-family: 'SF Pro Display'; font-size: 0.9rem; color: #d1d5db; display: flex; flex-direction: column; gap: 5px; scrollbar-width: none; z-index: 50; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, black 10%, black 100%); }
-            .log-entry { animation: fadeInUp 0.3s ease-out; }
-            .stats-panel { position: absolute; bottom: 40px; left: 40px; width: 280px; background: rgba(16,16,24,0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; z-index: 50; backdrop-filter: blur(5px); font-family: 'SF Pro Display'; color: #fff; }
-            .stats-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
-            .stats-label { color: #9ca3af; font-size: 0.9rem; }
-            .stats-val { font-weight: bold; color: #fbbf24; }
-            .stats-header { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; }
             .skill-tooltip { position: absolute; bottom: 130px; right: 0; width: 320px; background: rgba(16, 16, 24, 0.95); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 20px; color: #fff; font-family: 'SF Pro Display'; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.5); backdrop-filter: blur(10px); animation: fadeIn 0.1s; }
+            .data-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; max-height: 80vh; background: linear-gradient(180deg, #3d2a1a 0%, #2a1f14 100%); border: 3px solid #8b6914; border-radius: 16px; z-index: 2000; font-family: 'SF Pro Display'; color: #fff; animation: modalFadeIn 0.2s ease-out; overflow: hidden; }
+            .data-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 2px solid #8b6914; background: #4a3520; }
+            .data-modal-header h2 { margin: 0; font-size: 1.3rem; color: #fbbf24; }
+            .data-modal-close { width: 32px; height: 32px; border-radius: 50%; background: #8b6914; border: none; color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+            .data-modal-content { padding: 15px; max-height: 55vh; overflow-y: auto; }
+            .data-row { display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 8px; }
+            .data-row-avatar { width: 50px; height: 50px; border-radius: 8px; border: 2px solid #8b6914; background: #1a1a1a; overflow: hidden; }
+            .data-row-info { flex: 1; }
+            .data-row-name { font-weight: bold; color: #fbbf24; font-size: 0.95rem; }
+            .data-row-status { font-size: 0.75rem; color: #9ca3af; }
+            .data-row-value { font-weight: bold; font-size: 1.2rem; color: #4ade80; }
+            .data-row-value.damage { color: #f87171; }
+            .data-row-value.healing { color: #4ade80; }
+            .data-modal-tabs { display: flex; border-top: 2px solid #8b6914; }
+            .data-modal-tab { flex: 1; padding: 12px; text-align: center; background: #3d2a1a; cursor: pointer; font-weight: bold; font-size: 0.85rem; color: #9ca3af; transition: all 0.2s; border: none; }
+            .data-modal-tab:hover { background: #4a3520; }
+            .data-modal-tab.active { background: #8b6914; color: #fff; }
+            .data-btn { position: absolute; top: 30px; left: 30px; width: 50px; height: 50px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 2px solid #8b6914; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 100; transition: all 0.2s; }
+            .data-btn:hover { background: rgba(139, 105, 20, 0.5); transform: scale(1.1); }
         `;
         this.container.appendChild(this.arenaScreen);
     }
 
     private gameLoop(timestamp: number) {
-        if (!this.hero || !this.enemy || this.isPaused || !this.arenaScreen) return;
+        // Always request next frame at the end, so we guard logic not function
+        this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
+
+        if (!this.isBattleStarted || this.isPaused || !this.arenaScreen) return;
         const delta = timestamp - this.lastTick;
         this.lastTick = timestamp;
 
-        if (!this.hero.isDead && !this.enemy.isDead && !this.isAnimatingAction) {
-            const dt = delta * this.battleSpeed * 0.05;
-            this.tickEntity(this.hero, dt);
-            this.tickEntity(this.enemy, dt);
+        this.frameCount++;
+        // Update Data Modal if open every 30 frames (approx 1 sec at 30fps) to keep stats fresh
+        if (this.dataModal && this.frameCount % 30 === 0) {
+            const content = this.dataModal.querySelector('#data-modal-content') as HTMLElement;
+            if (content) this.renderDataModalContent(content);
+        }
 
-            if (this.hero.ap >= MAX_AP) {
-                this.takeTurn(this.hero, this.enemy);
-            } else if (this.enemy.ap >= MAX_AP) {
-                this.takeTurn(this.enemy, this.hero);
+        const livingHeroes = this.heroes.filter(h => !h.isDead);
+        const livingEnemies = this.enemies.filter(e => !e.isDead);
+
+        if (livingHeroes.length > 0 && livingEnemies.length > 0 && !this.isAnimatingAction) {
+            const dt = delta * this.battleSpeed * 0.05;
+
+            livingHeroes.forEach(h => this.tickEntity(h, dt));
+            livingEnemies.forEach(e => this.tickEntity(e, dt));
+
+            // Check for turns
+            // Merge all likely candidates
+            const allUnits = [...livingHeroes, ...livingEnemies];
+            const readyUnit = allUnits.find(u => u.ap >= MAX_AP);
+
+            if (readyUnit) {
+                const isHero = this.heroes.includes(readyUnit);
+                if (isHero) {
+                    // Hero attacks enemies in order: slot 1→2→3→4→5→6 (index 0→1→2→3→4→5)
+                    if (livingEnemies.length > 0) {
+                        // Find the first alive enemy by index order (slot 1 first)
+                        const target = this.enemies.find(e => !e.isDead) || livingEnemies[0];
+                        this.takeTurn(readyUnit, target);
+                    }
+                } else {
+                    // Enemy attacks heroes in order: slot 1→2→3→4→5→6 (index 0→1→2→3→4→5)
+                    if (livingHeroes.length > 0) {
+                        // Find the first alive hero by index order (slot 1 first)
+                        const target = this.heroes.find(h => !h.isDead) || livingHeroes[0];
+                        this.takeTurn(readyUnit, target);
+                    }
+                }
             }
         }
-        this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
     }
 
     private tickEntity(entity: BattleEntity, baseTick: number) {
@@ -367,7 +482,6 @@ export class BattleArenaUI {
         const isStunned = actor.effects.some(e => e.type === 'stun');
         if (isStunned) {
             this.showFloatingText(actor.element, "STUNNED!", true);
-            this.log(`${actor.name} is <span style="color:#fbbf24;font-weight:bold">STUNNED</span> and skips turn!`);
             this.playAnim(actor, 'dizzy', true);
             actor.ap = 0; actor.apBarFill.style.width = '0%';
             this.updateEffects(actor); this.isAnimatingAction = true;
@@ -385,7 +499,9 @@ export class BattleArenaUI {
         if (actor.cooldowns.skill1 > 0) actor.cooldowns.skill1--;
         if (actor.cooldowns.skill2 > 0) actor.cooldowns.skill2--;
         if (actor.cooldowns.ult > 0) actor.cooldowns.ult--;
-        if (actor.id === 'hero') this.updateHUD();
+
+        // If it's the main hero (first one) update HUD, or if we support switching HUDs later
+        if (this.heroes.includes(actor) && actor === this.heroes[0]) this.updateHUD();
 
         const heroData = HERO_DATA[actor.heroId];
         const skills = heroData?.skills || [];
@@ -466,9 +582,7 @@ export class BattleArenaUI {
             skillName = 'Basic Attack';
         }
 
-        const logColor = actor.id === 'hero' ? '#60a5fa' : '#f87171';
-        this.log(`${actor.name} casts <span style="font-weight:bold">${skillName}</span>!`, logColor);
-        if (actor.id === 'hero') this.updateHUD();
+        if (this.heroes.includes(actor) && actor === this.heroes[0]) this.updateHUD();
 
         // Animation & Movement Logic
         const performAttackAnim = () => {
@@ -479,23 +593,31 @@ export class BattleArenaUI {
         };
 
         if (actor.isMelee) {
-            // Dash to target
-            // Hero is at left: 25%, Enemy at right: 25%. Gap is 50% of screen.
-            // Approx pixel distance? Let's guess ~400-500px based on screen size.
-            // Or use relative units? Transform is usually pixels. Let's try 300px.
-            const direction = actor.id === 'hero' ? 1 : -1;
-            const distance = 350; // Slide distance
+            // Dash toward the target - calculate direction based on actual positions (both X and Y)
+            const actorRect = actor.element.getBoundingClientRect();
+            const targetRect = target.element.getBoundingClientRect();
+
+            // Calculate direction and distance to move toward target
+            const deltaX = targetRect.left - actorRect.left;
+            const deltaY = targetRect.top - actorRect.top;
+
+            // Move 60% of the way toward target, capped at reasonable limits
+            // Move almost fully toward target (stop 60px short to avoid full overlap)
+            const approachDist = 60;
+            const moveX = (Math.max(0, Math.abs(deltaX) - approachDist)) * Math.sign(deltaX);
+            const moveY = deltaY; // Move to exact Y plane
+
             actor.element.style.transition = `transform ${250 / this.battleSpeed}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
-            actor.element.style.transform = `translateX(${distance * direction}px)`;
+            actor.element.style.transform = `translate(-50%, -50%) scale(0.9) translate(${moveX}px, ${moveY}px)`;
 
             setTimeout(() => {
                 performAttackAnim();
             }, 250 / this.battleSpeed);
 
-            // Return to base
+            // Return to base position
             setTimeout(() => {
                 actor.element.style.transition = `transform ${350 / this.battleSpeed}ms ease-out`;
-                actor.element.style.transform = `translateX(0px)`;
+                actor.element.style.transform = `translate(-50%, -50%) scale(0.9)`;
                 setTimeout(() => { if (!actor.isDead) this.playAnim(actor, 'idle'); }, 350 / this.battleSpeed);
             }, (250 + 700) / this.battleSpeed); // Dash + Anim duration
         } else {
@@ -515,7 +637,8 @@ export class BattleArenaUI {
 
             if (target.hp <= 0) {
                 this.handleDeath(target);
-                this.isAnimatingAction = true;
+                // Reset animation flag after death animation to continue battle
+                setTimeout(() => { this.isAnimatingAction = false; }, 1500 / this.battleSpeed);
             } else {
                 setTimeout(() => { this.isAnimatingAction = false; }, 1200 / this.battleSpeed);
             }
@@ -525,8 +648,6 @@ export class BattleArenaUI {
     private applyStatus(target: BattleEntity, effect: StatusEffect) {
         target.effects.push(effect);
         this.updateStatusUI(target);
-        const color = effect.type === 'stun' ? '#fbbf24' : '#34d399';
-        this.log(`${target.name} gained <span style="color:${color};font-weight:bold">${effect.name}</span>!`);
         this.showFloatingText(target.element, effect.icon, false);
     }
 
@@ -536,7 +657,6 @@ export class BattleArenaUI {
         entity.effects = entity.effects.filter(e => e.duration > 0);
         if (expired.length > 0) {
             this.updateStatusUI(entity);
-            expired.forEach(e => this.log(`${entity.name}'s ${e.name} wore off.`));
         }
     }
 
@@ -640,37 +760,43 @@ export class BattleArenaUI {
             this.showFloatingText(target.element, `-${finalDamage}${isCrit ? '!' : ''}`, isCrit);
         }
 
-        const dmgColor = target.id === 'hero' ? '#f87171' : '#fbbf24';
-        this.log(`> ${target.name} took <span class="log-damage" style="color:${dmgColor}">-${finalDamage}</span> damage.`, '#9ca3af');
-        if (target.id === 'hero') document.getElementById('stats-hp')!.innerHTML = `${target.hp}/${target.maxHp}`;
+        // Track battle stats
+        attacker.battleStats.damageDealt += finalDamage;
+        target.battleStats.damageTaken += finalDamage;
     }
 
     private handleDeath(target: BattleEntity) {
         this.playAnim(target, 'dead', false);
         target.isDead = true;
-        this.showFloatingText(this.container, target.id === 'enemy' ? 'VICTORY!' : 'DEFEAT...', true);
-        this.log(target.id === 'enemy' ? "<b style='color:#fbbf24'>VICTORY!</b>" : "<b style='color:#f87171'>DEFEAT...</b>");
+
+        const anyHeroAlive = this.heroes.some(h => !h.isDead);
+        const anyEnemyAlive = this.enemies.some(e => !e.isDead);
+
+        if (!anyHeroAlive) {
+            this.showBattleResult(false);
+        } else if (!anyEnemyAlive) {
+            this.showBattleResult(true);
+        }
 
         // Razor On-Kill Logic (Attacker is who?)
-        // We need the killer reference. handleDeath doesn't have it.
-        // But in 1v1, the killer is the other entity.
-        const killer = target.id === 'hero' ? this.enemy : this.hero;
-        if (killer && killer.heroId === 'razor_assassin') {
-            // Passive Heal (Lvl 201+)
+        // Heuristic: If target died, find who might have killed them?
+        // In this async flow it's hard to track exact killer without passing context.
+        // We'll skip complex kill-credit logic for now or just check living Razors.
+        const potentialRazors = (this.heroes.includes(target) ? this.enemies : this.heroes).filter(u => u.heroId === 'razor_assassin' && !u.isDead);
+        potentialRazors.forEach(killer => {
+            // Simplification: All Razors heal when someone dies? Or just assume one of them got it?
+            // Let's just make it "Blood Scent" triggers for all Razors on death
             if (killer.level >= 201) {
                 const healAmt = Math.floor(killer.maxHp * 0.2);
                 killer.hp = Math.min(killer.maxHp, killer.hp + healAmt);
                 killer.hpBarFill.style.width = `${(killer.hp / killer.maxHp) * 100}%`;
                 this.showFloatingText(killer.element, `+${healAmt}`, false);
-                this.log(`${killer.name} consumes blood! (+${healAmt} HP)`);
+                killer.battleStats.healing += healAmt;
             }
-            // Ult Reset (Lvl 250)
             if (killer.level >= 250) {
                 killer.cooldowns.ult = 0;
-                this.showFloatingText(killer.element, "ULT RESET!", true);
-                this.updateHUD(); // If hero
             }
-        }
+        });
     }
 
     private playAnim(entity: BattleEntity, type: string, loop: boolean = true, onComplete?: () => void) {
@@ -715,31 +841,258 @@ export class BattleArenaUI {
         targetEl.appendChild(el); setTimeout(() => el.remove(), 1000 / this.battleSpeed);
     }
     // ... [Rest of Helpers] ...
-    private createBattleLog(c: HTMLElement) { this.battleLog = document.createElement('div'); this.battleLog.className = 'battle-log'; c.appendChild(this.battleLog); this.log("Battle Started - Oryx vs Sable!", "#fbbf24"); }
-    private log(m: string, col = '#d1d5db') { if (!this.battleLog) return; const e = document.createElement('div'); e.className = 'log-entry'; e.style.color = col; e.innerHTML = m; this.battleLog.appendChild(e); this.battleLog.scrollTop = this.battleLog.scrollHeight; }
-    private createStatsPanel(c: HTMLElement) {
-        if (!this.hero) return;
-        const heroData = HERO_DATA[this.hero.heroId];
-        const s = this.hero.stats;
-        const p = document.createElement('div'); p.className = 'stats-panel';
-        p.innerHTML = `<div class="stats-header">
-            <div style="font-size:1.4rem;color:#fbbf24">${heroData.name}</div>
-            <div style="font-size:0.9rem;color:#d1d5db;font-weight:normal">${heroData.title}</div>
-            <div style="font-size:0.8rem;color:#9ca3af;margin-top:2px;font-style:italic">${heroData.role}</div>
-        </div>
-        <div class="stats-row"><span class="stats-label">Level</span><span class="stats-val">${this.hero.level}</span></div>
-        <div class="stats-row"><span class="stats-label">Health</span><span class="stats-val" id="stats-hp">${this.hero.hp}/${this.hero.maxHp}</span></div>
-        <div class="stats-row"><span class="stats-label">Attack</span><span class="stats-val">${s.atk}</span></div>
-        <div class="stats-row"><span class="stats-label">Defense</span><span class="stats-val">${s.def}</span></div>
-        <div class="stats-row"><span class="stats-label">Speed</span><span class="stats-val">${s.speed}</span></div>
-        <div class="stats-row"><span class="stats-label">Crit Rate</span><span class="stats-val">${s.crit}</span></div>`;
-        c.appendChild(p);
+    private createDataButton(c: HTMLElement) {
+        const btn = document.createElement('button');
+        btn.className = 'data-btn';
+        btn.innerHTML = '📊';
+        btn.title = 'Battle Data';
+        btn.onclick = () => this.showDataModal();
+        c.appendChild(btn);
     }
-    private createHUD(c: HTMLElement) { if (!this.hero) return; const h = document.createElement('div'); h.style.cssText = `position:absolute;bottom:40px;right:40px;display:flex;gap:15px;align-items:center;z-index:50;background:rgba(0,0,0,0.5);padding:20px;border-radius:25px;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(5px);`; const gp = (i: string) => { const p = this.hero!.baseConfig.spritesheetPath.split('/'); return `${p.slice(0, 4).join('/')}/skills/${i}`; }; const hId = this.hero.heroId; const icons = HERO_DATA[hId].skillIcons; icons.forEach((icon: string, i: number) => { const p = gp(icon); const b = this.createSkillIcon(p, i === 3); b.onclick = (e) => { e.stopPropagation(); this.showTooltip(i, b); }; h.appendChild(b); this.skillBtns.push(b); }); const s = document.createElement('div'); s.style.cssText = `width:1px;height:60px;background:rgba(255,255,255,0.2);margin:0 10px;`; h.appendChild(s); this.speedBtn = document.createElement('div'); this.speedBtn.className = 'hud-btn'; this.speedBtn.style.cssText = `width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,0.6);border:2px solid #fff;color:#fff;display:flex;justify-content:center;align-items:center;font-weight:bold;font-family:'SF Pro Display';font-size:1.5rem;`; this.speedBtn.innerText = `${this.battleSpeed}x`; this.speedBtn.onclick = () => this.toggleSpeed(); h.appendChild(this.speedBtn); c.appendChild(h); this.updateHUD(); }
+
+    private showDataModal() {
+        // Remove existing modal if any
+        if (this.dataModal) {
+            this.dataModal.remove();
+            this.dataModal = null;
+            return;
+        }
+
+        this.dataModal = document.createElement('div');
+        this.dataModal.className = 'data-modal';
+
+        const header = document.createElement('div');
+        header.className = 'data-modal-header';
+        header.innerHTML = `<h2>Data</h2>`;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'data-modal-close';
+        closeBtn.innerHTML = '✕';
+        closeBtn.onclick = () => { this.dataModal?.remove(); this.dataModal = null; };
+        header.appendChild(closeBtn);
+
+        const content = document.createElement('div');
+        content.className = 'data-modal-content';
+        content.id = 'data-modal-content';
+
+        const tabs = document.createElement('div');
+        tabs.className = 'data-modal-tabs';
+
+        const tabNames: Array<{ key: 'damage' | 'treatment' | 'damageTaken', label: string }> = [
+            { key: 'damage', label: 'Damage' },
+            { key: 'treatment', label: 'Treatment' },
+            { key: 'damageTaken', label: 'Damage Taken' }
+        ];
+
+        tabNames.forEach(tab => {
+            const tabBtn = document.createElement('button');
+            tabBtn.className = `data-modal-tab ${tab.key === this.dataModalActiveTab ? 'active' : ''}`;
+            tabBtn.innerText = tab.label;
+            tabBtn.onclick = () => {
+                this.dataModalActiveTab = tab.key;
+                tabs.querySelectorAll('.data-modal-tab').forEach(t => t.classList.remove('active'));
+                tabBtn.classList.add('active');
+                this.renderDataModalContent(content);
+            };
+            tabs.appendChild(tabBtn);
+        });
+
+        this.dataModal.appendChild(header);
+        this.dataModal.appendChild(content);
+        this.dataModal.appendChild(tabs);
+
+        this.renderDataModalContent(content);
+        this.container.appendChild(this.dataModal);
+    }
+
+    private renderDataModalContent(contentEl: HTMLElement) {
+        contentEl.innerHTML = '';
+
+        // Combine heroes and enemies for display
+        const allUnits = [...this.heroes, ...this.enemies];
+
+        // Sort by the active tab's stat
+        const sortedUnits = allUnits.sort((a, b) => {
+            switch (this.dataModalActiveTab) {
+                case 'damage': return b.battleStats.damageDealt - a.battleStats.damageDealt;
+                case 'treatment': return b.battleStats.healing - a.battleStats.healing;
+                case 'damageTaken': return b.battleStats.damageTaken - a.battleStats.damageTaken;
+            }
+        });
+
+        sortedUnits.forEach(unit => {
+            const isHero = this.heroes.includes(unit);
+            const row = document.createElement('div');
+            row.className = 'data-row';
+
+            let value = 0;
+            let valueClass = '';
+            switch (this.dataModalActiveTab) {
+                case 'damage': value = unit.battleStats.damageDealt; valueClass = 'damage'; break;
+                case 'treatment': value = unit.battleStats.healing; valueClass = 'healing'; break;
+                case 'damageTaken': value = unit.battleStats.damageTaken; valueClass = 'damage'; break;
+            }
+
+            const status = unit.isDead ? 'Out of the fight' : `${unit.hp}/${unit.maxHp}`;
+            const borderColor = isHero ? '#4ade80' : '#f87171';
+
+            row.innerHTML = `
+                <div class="data-row-avatar" style="border-color: ${borderColor};">
+                    <div style="width:100%;height:100%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">
+                        ${isHero ? '⚔️' : '👹'}
+                    </div>
+                </div>
+                <div class="data-row-info">
+                    <div class="data-row-name">${unit.name}</div>
+                    <div class="data-row-status">${status}</div>
+                </div>
+                <div class="data-row-value ${valueClass}">${value.toLocaleString()}</div>
+            `;
+
+            contentEl.appendChild(row);
+        });
+    }
+
+    private createHUD(c: HTMLElement) {
+        if (this.heroes.length === 0) return;
+        const h = document.createElement('div');
+        // HUD Container - Flex row for controls
+        h.style.cssText = `
+            position: absolute; bottom: 40px; right: 40px; 
+            display: flex; gap: 15px; align-items: center; 
+            z-index: 50; 
+            background: rgba(0,0,0,0.5); padding: 15px; 
+            border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); 
+            backdrop-filter: blur(5px);
+        `;
+
+        // Start Button (Now inside HUD, Left aligned relative to Auto)
+        this.createStartButton(h);
+
+        // Auto Button
+        this.createAutoButton(h);
+
+        // Speed Button
+        this.createSpeedButton(h);
+
+        c.appendChild(h);
+        this.updateHUD();
+    }
+
+    private createStartButton(c: HTMLElement) {
+        this.startBtn = document.createElement('button');
+        // Play Icon (Triangle) - Scaled down slightly
+        this.startBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 30px; height: 30px; margin-left: 3px;"><path d="M8 5v14l11-7z"/></svg>`;
+        this.startBtn.style.cssText = `
+            width: 60px; height: 60px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            color: #fff; border: 2px solid #fff;
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            cursor: pointer; transition: all 0.2s;
+        `;
+
+        // Hover effect
+        this.startBtn.onmouseenter = () => { this.startBtn.style.transform = 'scale(1.1)'; };
+        this.startBtn.onmouseleave = () => { this.startBtn.style.transform = 'scale(1)'; };
+
+        this.startBtn.onclick = () => {
+            this.startBattle();
+        };
+
+        c.appendChild(this.startBtn);
+    }
+
+    private startBattle() {
+        if (this.isBattleStarted) return;
+        this.isBattleStarted = true;
+
+        // click sound if available
+
+        // Hide button
+        if (this.startBtn) {
+            this.startBtn.style.display = 'none';
+        }
+    }
+
+    private createAutoButton(c: HTMLElement) {
+        this.autoBtn = document.createElement('div');
+        this.autoBtn.className = 'hud-btn';
+        // Relative positioning for flex layout
+        this.autoBtn.style.cssText = `
+            width: 60px; height: 60px; border-radius: 50%; 
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
+            cursor: pointer; transition: all 0.2s;
+        `;
+
+        const icon = document.createElement('div');
+        icon.innerText = '↺';
+        icon.style.fontSize = '1.2rem';
+        this.autoBtn.appendChild(icon);
+
+        const text = document.createElement('div');
+        text.innerText = 'AUTO';
+        this.autoBtn.appendChild(text);
+
+        this.autoBtn.onclick = () => this.toggleAuto();
+        c.appendChild(this.autoBtn);
+
+        // Init visual state
+        if (this.isAuto) {
+            this.autoBtn.style.background = 'rgba(255, 215, 0, 0.8)';
+            this.autoBtn.style.color = '#000';
+            this.autoBtn.style.borderColor = '#ffd700';
+
+            // Auto-Start Battle if enabled initially
+            // Use setTimeout to allow UI to render first
+            setTimeout(() => {
+                if (!this.isBattleStarted) this.startBattle();
+            }, 500);
+        }
+    }
+
+    private toggleAuto() {
+        this.isAuto = !this.isAuto;
+        if (this.autoBtn) {
+            if (this.isAuto) {
+                this.autoBtn.style.background = 'rgba(255, 215, 0, 0.8)'; // Gold
+                this.autoBtn.style.color = '#000';
+                this.autoBtn.style.borderColor = '#ffd700';
+            } else {
+                this.autoBtn.style.background = 'rgba(0,0,0,0.6)';
+                this.autoBtn.style.color = '#fff';
+                this.autoBtn.style.borderColor = '#fff';
+            }
+        }
+
+        // Auto-Trigger: Start battle if not started
+        if (this.isAuto && !this.isBattleStarted) {
+            this.startBattle();
+        }
+    }
+
+    private createSpeedButton(c: HTMLElement) {
+        this.speedBtn = document.createElement('div');
+        this.speedBtn.className = 'hud-btn';
+        // Relative positioning for flex layout
+        this.speedBtn.style.cssText = `
+            width: 60px; height: 60px; border-radius: 50%; 
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
+            display: flex; justify-content: center; align-items: center; 
+            font-weight: bold; font-family: 'SF Pro Display'; font-size: 1.2rem; 
+            cursor: pointer; transition: all 0.2s;
+        `;
+        this.speedBtn.innerText = `${this.battleSpeed}x`;
+        this.speedBtn.onclick = () => this.toggleSpeed();
+        c.appendChild(this.speedBtn);
+    }
+
     private createSkillIcon(src: string, isUlt: boolean): HTMLElement { const s = isUlt ? 85 : 70; const b = isUlt ? '#fbbf24' : '#fff'; const w = document.createElement('div'); w.className = 'hud-btn'; w.style.cssText = `width:${s}px;height:${s}px;position:relative;border-radius:12px;border:2px solid ${b};background:#000;overflow:hidden;flex-shrink:0;`; const i = document.createElement('img'); i.src = src; i.style.cssText = `width:100%;height:100%;object-fit:cover;`; i.onerror = () => { i.style.display = 'none'; }; w.appendChild(i); const o = document.createElement('div'); o.className = 'cd-overlay'; o.style.cssText = `position:absolute;inset:0;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;color:#fff;font-size:1.8rem;font-weight:bold;opacity:0;pointer-events:none;transition:opacity 0.2s;`; w.appendChild(o); return w; }
-    private showTooltip(i: number, b: HTMLElement) { if (this.activeTooltip) this.activeTooltip.remove(); const hId = this.hero?.heroId; const d = HERO_DATA[hId!]?.skills[i]; if (!d) return; const t = document.createElement('div'); t.className = 'skill-tooltip'; t.innerHTML = `<h3>${d.name}</h3><div class="type">${d.type}</div><p>${d.desc}</p>`; b.parentElement?.appendChild(t); this.activeTooltip = t; }
+    private showTooltip(i: number, b: HTMLElement) { if (this.activeTooltip) this.activeTooltip.remove(); const hId = this.heroes[0]?.heroId; const d = HERO_DATA[hId!]?.skills[i]; if (!d) return; const t = document.createElement('div'); t.className = 'skill-tooltip'; t.innerHTML = `<h3>${d.name}</h3><div class="type">${d.type}</div><p>${d.desc}</p>`; b.parentElement?.appendChild(t); this.activeTooltip = t; }
     private toggleSpeed() { this.battleSpeed = this.battleSpeed === 2 ? 3 : 2; if (this.speedBtn) this.speedBtn.innerText = `${this.battleSpeed}x`; }
-    private updateHUD() { if (!this.hero) return; const u = (i: number, v: number) => { if (this.skillBtns[i]) { const o = this.skillBtns[i].querySelector('.cd-overlay') as HTMLElement; const w = this.skillBtns[i]; if (v > 0) { o.style.opacity = '1'; o.innerText = v.toString(); w.style.filter = 'grayscale(1)'; } else { o.style.opacity = '0'; w.style.filter = 'none'; } } }; u(0, this.hero.cooldowns.skill1); u(1, this.hero.cooldowns.skill2); u(2, this.hero.cooldowns.skill3); u(3, this.hero.cooldowns.ult); }
+    private updateHUD() { if (this.heroes.length === 0) return; const hero = this.heroes[0]; const u = (i: number, v: number) => { if (this.skillBtns[i]) { const o = this.skillBtns[i].querySelector('.cd-overlay') as HTMLElement; const w = this.skillBtns[i]; if (v > 0) { o.style.opacity = '1'; o.innerText = v.toString(); w.style.filter = 'grayscale(1)'; } else { o.style.opacity = '0'; w.style.filter = 'none'; } } }; u(0, hero.cooldowns.skill1); u(1, hero.cooldowns.skill2); u(2, hero.cooldowns.skill3); u(3, hero.cooldowns.ult); }
 
     private createBattleEntity(id: string, assetName: string, level: string, color: string, spriteConfig: HeroSpriteConfig): BattleEntity {
         const heroId = ASSET_TO_HERO_ID[assetName] || 'oryx_mage';
@@ -787,7 +1140,8 @@ export class BattleArenaUI {
             isDead: false, cooldowns: { skill1: 0, skill2: 0, skill3: 0, ult: 0 },
             currentAnim: 'idle', animFrame: 0, animTimestamp: 0, animReqId: null,
             currentAnimTotalFrames: ANIM_FRAMES.idle, loopAnim: true,
-            skillIcons: data.skillIcons, stats: stats, ap: 0, effects: [], passiveCharges: 0, heroId, isMelee
+            skillIcons: data.skillIcons, stats: stats, ap: 0, effects: [], passiveCharges: 0, heroId, isMelee,
+            battleStats: { damageDealt: 0, healing: 0, damageTaken: 0 }
         };
     }
 
@@ -902,7 +1256,8 @@ export class BattleArenaUI {
             effects: [],
             passiveCharges: 0,
             heroId: enemyDef.id,
-            isMelee
+            isMelee,
+            battleStats: { damageDealt: 0, healing: 0, damageTaken: 0 }
         };
     }
 
@@ -962,12 +1317,232 @@ export class BattleArenaUI {
         entity.animReqId = requestAnimationFrame(loopFn);
     }
 
+
+    private setIsometricPosition(el: HTMLElement, index: number, isPlayer: boolean) {
+        // Vertical Row Layout - Heroes and Enemies face each other horizontally
+        // 3 rows with same Y position for each pair
+        // Row 0: Top, Row 1: Middle, Row 2: Bottom
+        // Indices 0,1,2 = Front column (closer to center)
+        // Indices 3,4,5 = Back column (further from center)
+
+        let x = 0;
+        let y = 0;
+
+        // Row Y positions (same for both player and enemy) - Slot 1 at bottom, Slot 3 at top
+        const ROW_Y = [68, 48, 28]; // Bottom, Mid, Top rows (slot 1=bottom, slot 2=mid, slot 3=top)
+
+        // Player Side (Left) - Heroes face RIGHT toward enemies
+        const PLAYER_COORDS = [
+            { x: 38, y: ROW_Y[0] }, // 0: Front Bottom (Slot 1)
+            { x: 38, y: ROW_Y[1] }, // 1: Front Mid (Slot 2)
+            { x: 38, y: ROW_Y[2] }, // 2: Front Top (Slot 3)
+            { x: 24, y: ROW_Y[0] }, // 3: Back Bottom (Slot 4)
+            { x: 24, y: ROW_Y[1] }, // 4: Back Mid (Slot 5)
+            { x: 24, y: ROW_Y[2] }  // 5: Back Top (Slot 6)
+        ];
+
+        // Enemy Side (Right) - Enemies face LEFT toward heroes
+        const ENEMY_COORDS = [
+            { x: 62, y: ROW_Y[0] }, // 0: Front Bottom (Slot 1)
+            { x: 62, y: ROW_Y[1] }, // 1: Front Mid (Slot 2)
+            { x: 62, y: ROW_Y[2] }, // 2: Front Top (Slot 3)
+            { x: 76, y: ROW_Y[0] }, // 3: Back Bottom (Slot 4)
+            { x: 76, y: ROW_Y[1] }, // 4: Back Mid (Slot 5)
+            { x: 76, y: ROW_Y[2] }  // 5: Back Top (Slot 6)
+        ];
+
+        const safeIndex = index % 6;
+
+        if (isPlayer) {
+            const pos = PLAYER_COORDS[safeIndex];
+            x = pos.x;
+            y = pos.y;
+        } else {
+            const pos = ENEMY_COORDS[safeIndex];
+            x = pos.x;
+            y = pos.y;
+        }
+
+        const zIndex = 100 + Math.floor(y * 10);
+
+        Object.assign(el.style, {
+            position: 'absolute',
+            left: `${x}%`,
+            top: `${y}%`,
+            transform: `translate(-50%, -50%) scale(0.9)`,
+            zIndex: zIndex
+        });
+    }
+
     public close() {
         if (this.battleLoopId) cancelAnimationFrame(this.battleLoopId);
-        if (this.hero?.animReqId) cancelAnimationFrame(this.hero.animReqId);
-        if (this.enemy?.animReqId) cancelAnimationFrame(this.enemy.animReqId);
+        this.heroes.forEach(h => { if (h.animReqId) cancelAnimationFrame(h.animReqId); });
+        this.enemies.forEach(e => { if (e.animReqId) cancelAnimationFrame(e.animReqId); });
         this.container.style.transition = 'opacity 0.3s ease'; this.container.style.opacity = '0';
         setTimeout(() => { this.container.remove(); this.onClose(); }, 300);
     }
     public getElement(): HTMLElement { return this.container; }
+
+    private showBattleResult(win: boolean) {
+        if (this.isAnimatingAction) {
+            setTimeout(() => this.showBattleResult(win), 500);
+            return;
+        }
+
+        // Stop Loop
+        if (this.battleLoopId) cancelAnimationFrame(this.battleLoopId);
+        this.isPaused = true;
+
+        // Delay slightly for dramatic effect
+        setTimeout(() => {
+            this.createBattleResultOverlay(win);
+        }, 1000);
+    }
+
+    private createBattleResultOverlay(win: boolean) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: absolute; inset: 0; z-index: 2000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        `;
+
+        const title = document.createElement('div');
+        title.innerText = win ? "VICTORY" : "DEFEAT";
+        title.style.cssText = `
+            font-size: 5rem; font-weight: 900; 
+            color: ${win ? '#fbbf24' : '#ef4444'}; 
+            font-family: 'SF Pro Display'; 
+            text-shadow: 0 0 20px ${win ? 'rgba(251, 191, 36, 0.5)' : 'rgba(239, 68, 68, 0.5)'};
+            margin-bottom: 30px; letter-spacing: 2px;
+            transform: scale(0.5); opacity: 0;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        `;
+
+        const rewardsContainer = document.createElement('div');
+        rewardsContainer.style.cssText = `display: flex; gap: 20px; align-items: center; justify-content: center; margin-bottom: 40px; min-height: 80px; opacity: 0;`;
+
+        let calculatedRewards: LootReward[] = []; // Store to pass back
+
+        if (win) {
+            // Calculate dynamic loot
+            calculatedRewards = calculateLoot(this.mapId, this.stageLevel, this.isFirstClear);
+
+            rewardsContainer.style.animation = "fadeInUp 0.5s forwards 0.5s";
+
+            let rewardsHtml = '';
+            calculatedRewards.forEach(reward => {
+                rewardsHtml += `
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        <img src="${reward.icon}" style="width:64px; height:64px; margin-bottom:5px; object-fit:contain; ${reward.isDrop ? 'border:2px solid gold; border-radius:8px;' : ''}">
+                        <span style="color:#fff; font-weight:bold; font-family:'SF Pro Display'; text-shadow:0 1px 2px #000;">${reward.amount > 1 ? '+' + reward.amount : ''} ${reward.name}</span>
+                    </div>
+                `;
+            });
+            rewardsContainer.innerHTML = rewardsHtml;
+
+        } else {
+            rewardsContainer.innerHTML = `<div style="color: #aaa; margin-bottom: 30px; font-size: 1.2rem; font-family:'SF Pro Display';">Strengthen your heroes and try again!</div>`;
+            rewardsContainer.style.animation = "fadeInUp 0.5s forwards 0.5s";
+        }
+
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = `
+            display: flex; gap: 20px; align-items: center;
+            opacity: 0; animation: fadeInUp 0.5s forwards 0.8s;
+        `;
+
+        const btn = document.createElement('button');
+        btn.innerText = win ? "Continue" : "Exit";
+        btn.style.cssText = `
+            padding: 15px 50px; font-size: 1.5rem; font-weight: bold; 
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%); 
+            border: 2px solid #60a5fa; color: white; border-radius: 30px; 
+            cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        `;
+        if (!win) {
+            btn.style.background = 'linear-gradient(180deg, #4b5563 0%, #1f2937 100%)';
+            btn.style.borderColor = '#9ca3af';
+        }
+
+        btnContainer.appendChild(btn);
+        overlay.appendChild(title);
+        overlay.appendChild(rewardsContainer);
+        overlay.appendChild(btnContainer);
+
+        const handleComplete = () => {
+            if (this.onComplete) {
+                this.onComplete({
+                    win,
+                    isAuto: this.isAuto,
+                    rewards: calculatedRewards, // Pass dynamic rewards back
+                    finalSpeed: this.battleSpeed
+                });
+            } else {
+                this.close();
+            }
+        };
+
+        btn.onclick = () => handleComplete();
+
+        // Auto Continue Logic
+        if (win && this.isAuto) {
+            let countdown = 3;
+            // Create Cancel Button (Red X or "Stop")
+            const stopBtn = document.createElement('button');
+            stopBtn.innerText = "Stop Auto";
+            stopBtn.style.cssText = `
+                padding: 15px 30px; font-size: 1.2rem; font-weight: bold;
+                background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+                border: 2px solid #f87171; color: white; border-radius: 30px;
+                cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+                transition: transform 0.1s;
+            `;
+
+            // Insert Stop button before Continue button
+            btnContainer.insertBefore(stopBtn, btn);
+
+            btn.innerText = `Continue (${countdown})`;
+
+            const interval = setInterval(() => {
+                countdown--;
+                btn.innerText = `Continue (${countdown})`;
+                if (countdown <= 0) {
+                    clearInterval(interval);
+                    handleComplete();
+                }
+            }, 1000);
+
+            stopBtn.onclick = () => {
+                clearInterval(interval);
+                this.isAuto = false; // Turn off auto
+                this.toggleAuto(); // Update UI button state if needed (though visual is behind overlay)
+                stopBtn.remove(); // Remove stop button
+                btn.innerText = "Continue"; // Reset main button
+            };
+
+            // Allow manual continue to override
+            btn.onclick = () => {
+                clearInterval(interval);
+                handleComplete();
+            };
+        }
+
+        // Add keyframes if not exists (re-adding just in case)
+        const style = document.createElement('style');
+        style.innerText = `
+            @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+            @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes pulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.05); opacity: 0.8; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        `;
+        overlay.appendChild(style);
+
+        this.container.appendChild(overlay);
+    }
 }

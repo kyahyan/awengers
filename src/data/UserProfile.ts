@@ -138,7 +138,6 @@ export const VIP_LEVELS: VipBenefit[] = [
     { level: 10, requiredPoints: 35000, benefits: ["Daily Free Mythic Shard"] }
 ];
 
-// --- PLAYER STATISTICS ---
 export interface PlayerStatistics {
     highestRankAchieved: string; // e.g., "Celestial IV" - storing title for now
     totalBossesDefeated: number;
@@ -148,6 +147,14 @@ export interface PlayerStatistics {
     arenaWins: number;
     arenaBattles: number;
     heroUsage: Record<string, number>; // CodeName -> Count
+}
+
+// --- EQUIPMENT INSTANCE ---
+export interface EquipmentInstance {
+    itemId: string;      // References ItemSystem item ID
+    stars: number;       // 0-5 enhancement level
+    equipped?: boolean;  // Is it equipped on a hero?
+    heroId?: string;     // Which hero has it equipped
 }
 
 // --- USER PROFILE ---
@@ -191,6 +198,21 @@ export interface UserProfile {
 
     // Inventory: ItemID -> Count
     inventory: Record<string, number>;
+
+    // Equipment Inventory: Array of equipment instances with star levels
+    equipmentInventory?: EquipmentInstance[];
+
+    // Polishing Powder for enhancement
+    polishingPowder?: number;
+
+    // Deployment
+    deployedTeam?: string[];
+    heroes?: any; // Map or Object of hero instances
+
+    // Adventure Progress
+    adventureProgress?: {
+        jadeLotusShrine?: { maxStage: number };
+    };
 }
 
 export function getRankForLevel(level: number): RankDefinition {
@@ -248,6 +270,20 @@ export const MOCK_USER_PROFILE: UserProfile = {
         }
     },
     inventory: {},
+    equipmentInventory: [
+        { itemId: 'iron_leaf', stars: 3 },
+        { itemId: 'bear_claw', stars: 5 },
+        { itemId: 'swift_paw', stars: 4 },
+        { itemId: 'basic_boots', stars: 2 },
+        { itemId: 'vampire_tooth', stars: 1 },
+        { itemId: 'wisdom_plume', stars: 5 },
+        { itemId: 'ring_life', stars: 0 },
+        { itemId: 'turtle_shell', stars: 3 },
+    ],
+    polishingPowder: 50,
+    adventureProgress: {
+        jadeLotusShrine: { maxStage: 1 }
+    },
     uid: "MOCK-ADMIN-001"
 };
 

@@ -25,7 +25,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Antelope Mage",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/antelope_mage_with_animation_spritesheets/iso-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            spritesheetPath: "/assets/heroes/antelope_mage_with_animation_spritesheets/side-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,       // 2560 / 512 = 5 columns
@@ -37,7 +37,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Antelope Mage Left",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/antelope_mage_with_animation_spritesheets/iso-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            spritesheetPath: "/assets/heroes/antelope_mage_with_animation_spritesheets/side-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,
@@ -49,7 +49,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Antelope Ranger",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/antelope_ranger_with_animation_spritesheets/iso-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            spritesheetPath: "/assets/heroes/antelope_ranger_with_animation_spritesheets/side-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,
@@ -61,7 +61,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Antelope Ranger Left",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/antelope_ranger_with_animation_spritesheets/iso-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            spritesheetPath: "/assets/heroes/antelope_ranger_with_animation_spritesheets/side-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,
@@ -73,7 +73,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Razor",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/boar_assassin_with_animation_spritesheets/iso-right/Armature_Armature_idle_Base_Layer_001_spritesheet.png",
+            spritesheetPath: "/assets/heroes/boar_assassin_with_animation_spritesheets/side-left/Armature_Armature_idle_Base_Layer_001_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,
@@ -85,7 +85,7 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
         name: "Razor Left",
         use2DSprite: true,
         sprite2D: {
-            spritesheetPath: "/assets/heroes/boar_assassin_with_animation_spritesheets/iso-left/Armature_Armature_idle_Base_Layer_001_spritesheet.png",
+            spritesheetPath: "/assets/heroes/boar_assassin_with_animation_spritesheets/side-right/Armature_Armature_idle_Base_Layer_001_spritesheet.png",
             frameWidth: 512,
             frameHeight: 512,
             framesPerRow: 5,

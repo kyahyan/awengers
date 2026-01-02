@@ -151,6 +151,10 @@ export class HeroList {
         this.render();
     }
 
+    public getSelectedHeroes(): string[] {
+        return Array.from(this.selectedHeroes);
+    }
+
     private setFilter(attribute: string) {
         this.currentFilter = attribute;
         this.render();
@@ -306,6 +310,9 @@ export class HeroList {
                 };
                 sortGroup.appendChild(btn);
             });
+
+
+
             filterBar.appendChild(sortGroup);
 
             this.container.appendChild(filterBar);

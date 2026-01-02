@@ -7,11 +7,12 @@ export interface ShopItem {
     name: string;
     xpAmount?: number;
     coinAmount?: number;
+    materialAmount?: number; // For materials like polishing powder
     cost: number;
     currencyType?: 'gem' | 'coin';
     icon: string;
     description: string;
-    itemType?: 'xp' | 'summon' | 'coin' | 'tier1_item';
+    itemType?: 'xp' | 'summon' | 'coin' | 'tier1_item' | 'material';
     quantity?: number;
     stats?: { [key: string]: number };
 }
@@ -24,6 +25,9 @@ export const SHOP_ITEMS: ShopItem[] = [
     // Grand Summon Scrolls
     { id: 'grand_summon_8', name: 'Grand Summon x8', quantity: 8, cost: 1000, icon: 'grand-summon', description: '8 Grand Summon Scrolls', itemType: 'summon' },
     { id: 'grand_summon_1', name: 'Grand Summon x1', quantity: 1, cost: 150, icon: 'grand-summon', description: '1 Grand Summon Scroll', itemType: 'summon' },
+    // Polishing Powder (for item enhancement)
+    { id: 'polish_powder_5', name: 'Polishing Powder x5', materialAmount: 5, cost: 50, currencyType: 'gem', icon: 'Polishing Powder', description: '5 Polishing Powder for item enhancement', itemType: 'material' },
+    { id: 'polish_powder_box', name: 'Box of Polishing Powder', materialAmount: 50, cost: 400, currencyType: 'gem', icon: 'Polishing Powder', description: '50 Polishing Powder - Best Value!', itemType: 'material' },
     // Coin Packs
     { id: 'coin_few', name: 'Few Coins', coinAmount: 500000, cost: 100, icon: 'few-coin', description: '500,000 Coins', itemType: 'coin' },
     { id: 'coin_bag', name: 'Bag of Coins', coinAmount: 1500000, cost: 499, icon: 'bag-coins', description: '1,500,000 Coins', itemType: 'coin' },
@@ -198,6 +202,8 @@ export class ShopUI {
             iconPath = `/assets/shop/${item.icon}.png`;
         } else if (item.itemType === 'tier1_item') {
             iconPath = `/assets/item/Tier 1/${item.icon}.png`;
+        } else if (item.itemType === 'material') {
+            iconPath = `/assets/craft/${item.icon}.png`;
         } else {
             iconPath = `/assets/shop/exp-icons/${item.icon}.png`;
         }

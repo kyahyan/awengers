@@ -243,6 +243,7 @@ export class HeaderUI {
             { key: 'HOME', label: 'Home', icon: '/assets/home/home.png', size: 150 },
             { key: 'HEROES', label: 'Heroes', icon: '/assets/home/heroes.png', size: 140 },
             { key: 'SUMMON', label: 'Summon', icon: '/assets/home/summon.png', size: 120 },
+            { key: 'FORGE', label: 'Forge', icon: '/assets/home/forge.png', size: 140 },
             { key: 'BACKPACK', label: 'Backpack', icon: '/assets/home/backpack.png', size: 150 },
             { key: 'SHOP', label: 'Shop', icon: '/assets/home/store.png', size: 160 },
         ];

@@ -1,12 +1,27 @@
 import { JADE_LOTUS_SHRINE_STAGES, StageDefinition, getStageEnemyIcons, getStageMainEnemy } from '../data/AdventureData';
 import { BattleArenaUI } from './BattleArenaUI';
+import { LootReward } from '../data/LootSystem';
 
 export class AdventureModal {
     private container: HTMLElement;
     private onClose: () => void;
 
-    constructor(onClose: () => void) {
+    private getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number }[];
+
+    private onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number) => void;
+
+    constructor(
+        onClose: () => void,
+        getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number }[],
+        private maxStage: number = 1,
+        onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number) => void,
+        private initialAuto: boolean = false,
+        private initialSpeed: number = 2
+    ) {
         this.onClose = onClose;
+        this.getDeployedTeam = getDeployedTeam;
+        this.maxStage = maxStage;
+        this.onBattleResult = onBattleResult;
         this.container = document.createElement('div');
         this.container.className = 'adventure-modal-overlay';
 
@@ -48,20 +63,44 @@ export class AdventureModal {
             return;
         }
 
+        const deployedTeam = this.getDeployedTeam();
+        if (deployedTeam.length === 0) {
+            alert("No heroes deployed! Please deploy a team in the Deployment tab.");
+            return;
+        }
+
         console.log(`[Adventure] Starting battle with ${enemy.displayName} (Level ${stage.recommendedLevel})`);
+        console.log(`[Adventure] Deployed Team:`, deployedTeam);
 
         // Close the adventure modal
         this.close();
 
-        // Create battle UI with enemy data
+        // Create battle UI with team data
         setTimeout(() => {
             const enemyId = stage.enemyIds[0] || 'treant';
+
+            const isFirstClear = stage.id === this.maxStage; // Assume maxStage is the highest unlocked
+            const mapId = 1; // Currently only Jade Lotus Shrine (Map 1) implemented
+
             const battleUI = new BattleArenaUI(
-                'Antelope Mage',
+                deployedTeam,
                 () => console.log('[Adventure] Battle ended'),
+                (result) => {
+                    battleUI.close();
+                    if (this.onBattleResult) {
+                        this.onBattleResult(stage.id, result.win, result.isAuto, result.rewards, result.finalSpeed);
+                    }
+                },
                 enemyId,
-                stage.recommendedLevel
+                stage.recommendedLevel,
+                this.initialAuto, // use persisted auto
+                mapId,
+                isFirstClear,
+                this.initialSpeed // use persisted speed
             );
+
+            document.body.appendChild(battleUI.getElement());
+
             document.body.appendChild(battleUI.getElement());
         }, 350);
     }
@@ -288,22 +327,24 @@ export class AdventureModal {
                 const enemyIcons = getStageEnemyIcons(stage);
                 const enemiesHtml = enemyIcons.map(src => `<img src="${src}" class="enemy-icon" onerror="this.style.display='none'"/>`).join('');
 
+                const isLocked = stage.id > this.maxStage;
+
                 row.innerHTML = `
                     <div class="stage-info">
-                        <div class="stage-name">${stage.name}</div>
+                        <div class="stage-name" style="${isLocked ? 'color:#888;' : ''}">${stage.name}</div>
                         <div class="stage-details">Rec. Level: ${stage.recommendedLevel}</div>
                     </div>
-                    <div class="stage-enemies">
+                    <div class="stage-enemies" style="${isLocked ? 'opacity:0.3;' : ''}">
                         ${enemiesHtml}
                     </div>
-                    <button class="battle-btn" data-id="${stage.id}">
-                        ⚡ Battle
+                    <button class="battle-btn" data-id="${stage.id}" ${isLocked ? 'disabled style="background:gray;cursor:not-allowed;box-shadow:none;border-color:#555;"' : ''}>
+                        ${isLocked ? '🔒 Locked' : '⚡ Battle'}
                     </button>
                 `;
 
                 // Battle Click
                 const btn = row.querySelector('.battle-btn');
-                if (btn) {
+                if (btn && !isLocked) {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this.startBattle(stage);

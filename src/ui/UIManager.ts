@@ -7,11 +7,15 @@ import { LoadingUI } from './LoadingUI';
 import { ShopUI, ShopItem } from './ShopUI';
 import { SummonUI } from './SummonUI';
 import { BackpackUI } from './BackpackUI';
+import { ForgeUI } from './ForgeUI';
 import { HeroDetailUI } from './HeroDetailUI';
 import { GalleryHeroModal } from './GalleryHeroModal';
 import { UserProfile, addPlayerXp } from '../data/UserProfile';
 import { HERO_ASSETS } from '../data/HeroAssetsMap';
 import { AdventureModal } from './AdventureModal';
+import { BattleArenaUI } from './BattleArenaUI';
+import { JADE_LOTUS_SHRINE_STAGES } from '../data/AdventureData';
+import { LootReward, MAP_SHARD_DROPS, ShardDefinition } from '../data/LootSystem';
 
 export class UIManager {
     private debugEl!: HTMLElement;
@@ -24,6 +28,7 @@ export class UIManager {
     private shopUI: ShopUI | null = null;
     private summonUI: SummonUI | null = null;
     private backpackUI: BackpackUI | null = null;
+    private forgeUI: ForgeUI | null = null;
     private currentScreenEl: HTMLElement | null = null;
     public loadingUI: LoadingUI | null = null;
     public onStartLoading: (() => void) | null = null;
@@ -38,6 +43,9 @@ export class UIManager {
     // Hero navigation tracking
     private visibleHeroNames: string[] = [];
     private currentHeroIndex: number = 0;
+
+    private lastBattleAuto: boolean = false;
+    private lastBattleSpeed: number = 2;
 
     constructor() {
         this.uiContainer = document.getElementById('game-ui');
@@ -95,6 +103,38 @@ export class UIManager {
         if (this.heroList) {
             this.heroList.setSelected(names);
         }
+    }
+
+    public getDeployedTeam(): { name: string, level: number, instanceId: string, stars: number }[] {
+        if (!this.currentUser || !this.currentUser.deployedTeam) return [];
+
+        const deployedIds = this.currentUser.deployedTeam;
+        const heroesMap = this.currentUser.heroes || {};
+        const heroEntries = heroesMap instanceof Map ? Array.from(heroesMap.entries()) : Object.entries(heroesMap);
+
+        const team: { name: string, level: number, instanceId: string, stars: number }[] = [];
+
+        deployedIds.forEach((id: string) => {
+            const entry = heroEntries.find(([k, v]) => k === id);
+            if (entry) {
+                const data = entry[1] as any;
+                // Capitalize first letter strictly
+                const rawName = data.heroCodeName || (id.includes('_') ? id.split('_')[0] : id);
+                const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                team.push({
+                    name: name,
+                    level: data.level || 1,
+                    instanceId: id,
+                    stars: data.stars || 1
+                });
+            } else {
+                // Fallback for missing data
+                const raw = id.includes('_') ? id.split('_')[0] : id;
+                const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+                team.push({ name, level: 1, instanceId: id, stars: 1 });
+            }
+        });
+        return team;
     }
 
     private topHud: HTMLElement | null = null;
@@ -554,16 +594,149 @@ export class UIManager {
             this.adventureModal.getElement().remove();
         }
 
+        const maxStage = this.currentUser?.adventureProgress?.jadeLotusShrine?.maxStage || 1;
+
         this.adventureModal = new AdventureModal(() => {
             this.adventureModal = null;
-        });
+        },
+            // Fix: remove redundant getDeployedTeam argument if AdventureModal doesn't need it or was partially refactored? 
+            // Wait, looking at AdventureModal constructor: onClose, getDeployedTeam, maxStage, onBattleResult, initAuto, initSpeed
+            // So arg 2 IS getDeployedTeam.
+            () => this.getDeployedTeam(),
+            maxStage,
+            (stageId, win, isAuto, rewards, finalSpeed) => this.handleAdventureBattleResult(mapId, stageId, win, isAuto, rewards || [], finalSpeed),
+            this.lastBattleAuto,
+            this.lastBattleSpeed
+        );
 
         this.uiContainer?.appendChild(this.adventureModal.getElement());
         console.log(`[UIManager] Opened Adventure Modal for Map ${mapId}`);
     }
 
+    public handleAdventureBattleResult(mapId: number, stageId: number, win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number = 2) {
 
-    // Helper method to close all overlay modals (Summon, Shop, Backpack)
+        // Persist settings
+        this.lastBattleAuto = isAuto;
+        this.lastBattleSpeed = finalSpeed;
+        if (!this.currentUser) return;
+
+        if (win) {
+            console.log(`[UIManager] Victory on Stage ${stageId}! Granting rewards...`);
+
+            // 1. Process Dynamic Rewards
+            if (rewards && rewards.length > 0) {
+                rewards.forEach(r => {
+                    switch (r.type) {
+                        case 'coin':
+                            this.currentUser!.gold += r.amount;
+                            break;
+                        case 'xp':
+                            addPlayerXp(this.currentUser!, r.amount);
+                            break;
+                        case 'gem':
+                            this.currentUser!.gems += r.amount;
+                            break;
+                        case 'soul_potion':
+                            this.currentUser!.soulPotion = (this.currentUser!.soulPotion || 0) + r.amount;
+                            break;
+                        case 'hero_potion':
+                            this.currentUser!.heroPotion = (this.currentUser!.heroPotion || 0) + r.amount;
+                            break;
+                        case 'powder':
+                            this.currentUser!.polishingPowder = (this.currentUser!.polishingPowder || 0) + r.amount;
+                            break;
+                        case 'item_shard':
+                        case 'hero_shard':
+                        case 'item':
+                            if (r.itemId) {
+                                // Add to inventory (simple count)
+                                if (!this.currentUser!.inventory) this.currentUser!.inventory = {};
+                                // Handle Map vs Object potential check
+                                const inv = this.currentUser!.inventory as any;
+                                const current = inv[r.itemId] || 0;
+                                inv[r.itemId] = current + r.amount;
+                                console.log(`[UIManager] Added ${r.amount} x ${r.itemId}`);
+                            }
+                            break;
+                    }
+                });
+            } else {
+                // Fallback for safety (though LootSystem should handle it)
+                this.currentUser.gold += 1000;
+                addPlayerXp(this.currentUser, 500);
+            }
+
+            // 2. Update Progress
+            if (!this.currentUser.adventureProgress) this.currentUser.adventureProgress = {};
+            if (!this.currentUser.adventureProgress.jadeLotusShrine) this.currentUser.adventureProgress.jadeLotusShrine = { maxStage: 1 };
+
+            // If completed current max stage, unlock next
+            const currentMax = this.currentUser.adventureProgress.jadeLotusShrine.maxStage;
+            if (stageId === currentMax) {
+                this.currentUser.adventureProgress.jadeLotusShrine.maxStage = currentMax + 1;
+                console.log(`[UIManager] Unlocked Stage ${currentMax + 1}`);
+            }
+
+            // 3. Save
+            this.syncUser();
+
+            // 4. Update Header
+            if (this.headerUI) this.headerUI.update(this.currentUser);
+        } else {
+            console.log(`[UIManager] Defeat on Stage ${stageId}.`);
+        }
+
+        // Logic for Auto-Next
+        if (win && isAuto) {
+            const nextStageId = stageId + 1;
+            // Find stage definition
+            const stages = JADE_LOTUS_SHRINE_STAGES; // Assuming mapId 1 is this
+            const nextStage = stages.find(s => s.id === nextStageId);
+
+            if (nextStage) {
+                console.log(`[UIManager] Auto-starting Stage ${nextStageId}`);
+                // Start next battle directly
+                const isNextFirstClear = nextStageId === (this.currentUser!.adventureProgress?.jadeLotusShrine?.maxStage || 1);
+
+                const battleUI = new BattleArenaUI(
+                    this.getDeployedTeam(),
+                    () => {
+                        // On Close (manual exit or error) -> Return to map
+                        this.showAdventureModal(mapId);
+                    },
+                    (result) => {
+                        battleUI.close();
+                        this.handleAdventureBattleResult(
+                            mapId,
+                            nextStageId,
+                            result.win,
+                            result.isAuto,
+                            result.rewards || [],
+                            result.finalSpeed || 2
+                        );
+                    },
+                    nextStage.enemyIds[0] || 'treant',
+                    nextStage.recommendedLevel,
+                    this.lastBattleAuto, // persist auto state
+                    mapId,
+                    isNextFirstClear,
+                    this.lastBattleSpeed // persist speed
+                );
+                document.body.appendChild(battleUI.getElement());
+                return; // SKIP showing adventure modal below
+            } else {
+                console.log('[UIManager] No more stages or auto stopped.');
+            }
+        }
+
+        // Re-open Adventure Modal to show updated state (Default behavior)
+        setTimeout(() => {
+            this.showAdventureModal(mapId);
+        }, 100);
+    }
+
+
+    // Helper method to close all overlay modals (Summon, Shop, Backpack, Forge)
     // Optimized: uses non-blocking DOM removal
     private closeAllOverlayModals() {
         // Remove modals synchronously to prevent visual overlap, but do it efficiently
@@ -579,6 +752,10 @@ export class UIManager {
         if (this.backpackUI) {
             toRemove.push(this.backpackUI.getElement());
             this.backpackUI = null;
+        }
+        if (this.forgeUI) {
+            toRemove.push(this.forgeUI.getElement());
+            this.forgeUI = null;
         }
         // Batch remove in single frame
         if (toRemove.length > 0) {
@@ -693,6 +870,34 @@ export class UIManager {
                     const saved = localStorage.getItem('awengers_session');
                     if (saved) this.currentUser = JSON.parse(saved);
                 }, 0);
+            });
+            return;
+        }
+
+        // SPECIAL CASE: FORGE as overlay (crafting and enhancement)
+        if (screen === 'FORGE') {
+            if (!this.currentUser) return;
+
+            const wasOnHeroes = this.currentScreenEl !== null;
+
+            this.forgeUI = new ForgeUI(this.currentUser, () => {
+                if (this.forgeUI) {
+                    this.forgeUI.getElement().remove();
+                    this.forgeUI = null;
+                }
+                if (!wasOnHeroes) {
+                    this.toggleHomeElements(true);
+                }
+            }, (updatedUser) => {
+                // Handle user updates from Forge (gold spent, items changed)
+                this.currentUser = updatedUser;
+                if (this.headerUI) this.headerUI.update(this.currentUser);
+                // Persist to database
+                this.syncUser();
+            });
+
+            requestAnimationFrame(() => {
+                this.uiContainer?.appendChild(this.forgeUI!.getElement());
             });
             return;
         }
@@ -858,17 +1063,18 @@ export class UIManager {
                     }
 
                 } else if (tabName === 'Shards') {
-                    // Shards Tab: Dynamic Display
+                    // Shards Tab: Dynamic Display with Sub-Tabs
                     const shardsContent = document.createElement('div');
                     shardsContent.style.cssText = `
                         display: flex;
                         flex-direction: column;
                         align-items: center;
                         height: 100%;
-                        padding-top: 20px;
-                        overflow-y: auto;
+                        padding-top: 120px;
+                        overflow-y: hidden;
                     `;
 
+                    // Main Title
                     const title = document.createElement('div');
                     title.innerText = 'MY SHARDS';
                     title.style.cssText = `
@@ -880,32 +1086,129 @@ export class UIManager {
                     `;
                     shardsContent.appendChild(title);
 
-                    // Filter Shards from inventory (keys starting with 'shard_')
-                    const inventory = this.currentUser.inventory || {};
-                    const shardKeys = Object.keys(inventory).filter(k => k.startsWith('shard_') && inventory[k] > 0);
+                    // --- Sub-Tabs Logic ---
+                    let currentShardTab: 'Hero' | 'Item' = 'Hero';
 
-                    if (shardKeys.length === 0) {
-                        const emptyMsg = document.createElement('div');
-                        emptyMsg.innerText = 'No shards collected yet.';
-                        emptyMsg.style.cssText = `color: #8b6542; font-size: 1.2rem; margin-top: 50px; font-family: 'SF Pro Rounded', sans-serif;`;
-                        shardsContent.appendChild(emptyMsg);
-                    } else {
+                    // Sub-Tab Container
+                    const subTabContainer = document.createElement('div');
+                    subTabContainer.style.cssText = `
+                        display: flex;
+                        gap: 10px;
+                        margin-bottom: 20px;
+                        background: #3d2815;
+                        padding: 5px;
+                        border-radius: 25px;
+                        border: 1px solid #8b6542;
+                    `;
+
+                    const createSubTab = (name: 'Hero' | 'Item', label: string) => {
+                        const tab = document.createElement('div');
+                        tab.innerText = label;
+                        tab.style.cssText = `
+                            padding: 8px 24px;
+                            border-radius: 20px;
+                            cursor: pointer;
+                            font-family: 'SF Pro Rounded', sans-serif;
+                            font-weight: bold;
+                            font-size: 1rem;
+                            transition: all 0.2s;
+                        `;
+                        tab.onclick = () => {
+                            if (currentShardTab !== name) {
+                                currentShardTab = name;
+                                updateSubTabs();
+                                renderShardGrid();
+                            }
+                        };
+                        return tab;
+                    };
+
+                    const heroTabBtn = createSubTab('Hero', 'Hero Shards');
+                    const itemTabBtn = createSubTab('Item', 'Item Shards');
+
+                    subTabContainer.appendChild(heroTabBtn);
+                    subTabContainer.appendChild(itemTabBtn);
+                    shardsContent.appendChild(subTabContainer);
+
+                    const updateSubTabs = () => {
+                        const activeStyle = `background: #d97706; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);`;
+                        const inactiveStyle = `background: transparent; color: #a07850;`;
+
+                        heroTabBtn.style.cssText = heroTabBtn.style.cssText + (currentShardTab === 'Hero' ? activeStyle : inactiveStyle);
+                        itemTabBtn.style.cssText = itemTabBtn.style.cssText + (currentShardTab === 'Item' ? activeStyle : inactiveStyle);
+                    };
+
+                    // Grid Container
+                    const gridContainer = document.createElement('div');
+                    gridContainer.style.cssText = `
+                        width: 100%;
+                        flex: 1;
+                        overflow-y: auto;
+                        display: flex;
+                        justify-content: center;
+                    `;
+                    shardsContent.appendChild(gridContainer);
+
+                    const renderShardGrid = () => {
+                        gridContainer.innerHTML = '';
                         const grid = document.createElement('div');
                         grid.style.cssText = `
                             display: grid;
-                            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                            grid-auto-rows: min-content;
                             gap: 20px;
                             width: 90%;
                             max-width: 1000px;
                             padding-bottom: 40px;
                         `;
 
-                        shardKeys.forEach(key => {
+                        const inventory = this.currentUser.inventory || {};
+                        const allKeys = Object.keys(inventory).filter(k => inventory[k] > 0);
+                        let displayKeys: string[] = [];
+
+                        if (currentShardTab === 'Hero') {
+                            displayKeys = allKeys.filter(k => k.startsWith('shard_') && !k.endsWith('_shard'));
+                        } else {
+                            // Item Shards: Ends with '_shard' OR matches a known Map Shard ID
+                            const knownShardIds = Object.values(MAP_SHARD_DROPS).map(d => d.id);
+                            displayKeys = allKeys.filter(k =>
+                                k.endsWith('_shard') || knownShardIds.includes(k)
+                            );
+                        }
+
+                        if (displayKeys.length === 0) {
+                            const emptyMsg = document.createElement('div');
+                            emptyMsg.innerText = currentShardTab === 'Hero' ? 'No Hero Shards collected.' : 'No Item Shards collected.';
+                            emptyMsg.style.cssText = `color: #8b6542; font-size: 1.2rem; margin-top: 50px; font-family: 'SF Pro Rounded', sans-serif; text-align: center; width: 100%;`;
+                            gridContainer.appendChild(emptyMsg);
+                            return;
+                        }
+
+                        displayKeys.forEach(key => {
                             const count = inventory[key];
-                            const heroCode = key.replace('shard_', '');
-                            // Attempt to find hero name for display
-                            const heroAsset = HERO_ASSETS.find(h => h.name === heroCode);
-                            const displayName = heroAsset ? heroAsset.name : heroCode;
+                            let displayName = key;
+                            let iconPath = '';
+                            let typeLabel = '';
+
+                            if (currentShardTab === 'Hero') {
+                                const heroCode = key.replace('shard_', '');
+                                const heroAsset = HERO_ASSETS.find(h => h.name === heroCode);
+                                displayName = heroAsset ? heroAsset.name : heroCode;
+                                typeLabel = 'Hero Shard';
+                                iconPath = '/assets/items/hero_shard.png'; // Fallback as headshot doesn't exist yet
+                            } else {
+                                // Find definition in MAP_SHARD_DROPS
+                                const def = Object.values(MAP_SHARD_DROPS).find(d => d.id === key);
+                                if (def) {
+                                    displayName = def.name;
+                                    iconPath = def.icon;
+                                } else {
+                                    // Fallback for unknown shards
+                                    displayName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    iconPath = '/assets/item/shard-item/Tier 1/Ring of Life - shard.png'; // Generic fallback
+                                }
+                                typeLabel = 'Item Shard';
+                            }
 
                             const card = document.createElement('div');
                             card.style.cssText = `
@@ -918,16 +1221,21 @@ export class UIManager {
                                 align-items: center;
                                 cursor: pointer;
                                 transition: transform 0.2s;
+                                position: relative;
                             `;
                             card.onmouseenter = () => card.style.transform = 'scale(1.03)';
                             card.onmouseleave = () => card.style.transform = 'scale(1)';
 
                             // Icon
-                            const icon = document.createElement('div');
-                            icon.innerText = '🧩';
-                            icon.style.fontSize = '40px';
-                            icon.style.marginBottom = '10px';
-                            card.appendChild(icon);
+                            const iconEl = document.createElement('img');
+                            iconEl.src = iconPath;
+                            iconEl.style.cssText = `
+                                width: 64px; height: 64px;
+                                object-fit: contain;
+                                margin-bottom: 10px;
+                                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+                            `;
+                            card.appendChild(iconEl);
 
                             // Name
                             const nameEl = document.createElement('div');
@@ -935,10 +1243,13 @@ export class UIManager {
                             nameEl.style.cssText = `
                                 color: #f5deb3;
                                 font-weight: bold;
-                                font-size: 1.1rem;
+                                font-size: 1rem;
                                 text-align: center;
                                 margin-bottom: 5px;
                                 font-family: 'SF Pro Rounded', sans-serif;
+                                line-height: 1.2;
+                                height: 2.4em; /* Fixed height for 2 lines */
+                                display: flex; align-items: center; justify-content: center;
                             `;
                             card.appendChild(nameEl);
 
@@ -950,14 +1261,17 @@ export class UIManager {
                                 font-size: 1.4rem;
                                 font-weight: bold;
                                 font-family: 'SF Pro Rounded', sans-serif;
+                                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
                             `;
                             card.appendChild(countEl);
 
                             grid.appendChild(card);
                         });
-                        shardsContent.appendChild(grid);
-                    }
+                        gridContainer.appendChild(grid);
+                    };
 
+                    updateSubTabs();
+                    renderShardGrid();
                     contentArea.appendChild(shardsContent);
 
                 } else if (tabName === 'Gallery') {
@@ -1426,6 +1740,7 @@ export class UIManager {
 
                     // Attribute filter state
                     let currentAttrFilter: 'All' | 'STR' | 'AGI' | 'INT' = 'All';
+                    let currentSortMode: 'Level' | 'Power' = 'Level';
 
                     // Hero selection area with filter
                     const selectSection = document.createElement('div');
@@ -1456,9 +1771,53 @@ export class UIManager {
                     `;
                     filterRow.appendChild(selectLabel);
 
+                    // Controls container (right side)
+                    const controlsContainer = document.createElement('div');
+                    controlsContainer.style.cssText = `display: flex; gap: 15px; margin-left: auto; align-items: center;`;
+
+                    // Sort Buttons
+                    const sortBtns = document.createElement('div');
+                    sortBtns.style.cssText = `display: flex; gap: 4px;`;
+
+                    const sortOptions = [
+                        { name: 'Level', icon: '⬆' },
+                        { name: 'Power', icon: '⚔️' }
+                    ];
+
+                    const sortElements: HTMLElement[] = [];
+                    const updateSortStyles = () => {
+                        sortElements.forEach((btn, idx) => {
+                            const isSelected = currentSortMode === sortOptions[idx].name;
+                            btn.style.background = isSelected ? '#d97706' : '#5c3d25';
+                            btn.style.filter = isSelected ? 'brightness(1.1)' : 'brightness(1)';
+                            btn.style.border = isSelected ? '1px solid #fbbf24' : '1px solid #3d2815';
+                            btn.style.color = isSelected ? '#fff' : '#aaa';
+                            btn.style.boxShadow = isSelected ? '0 0 5px rgba(251, 191, 36, 0.3)' : 'none';
+                        });
+                    };
+
+                    sortOptions.forEach(opt => {
+                        const btn = document.createElement('button');
+                        btn.innerHTML = `${opt.icon} <span style="font-size: 0.8em">${opt.name}</span>`;
+                        btn.style.cssText = `
+                            display: flex; align-items: center; gap: 4px; padding: 6px 10px;
+                            border-radius: 6px; cursor: pointer; font-family: 'SF Pro Rounded', sans-serif;
+                            font-size: 0.8rem; transition: all 0.2s;
+                        `;
+                        btn.onclick = () => {
+                            currentSortMode = opt.name as any;
+                            updateSortStyles();
+                            renderHeroGrid();
+                        };
+                        sortElements.push(btn);
+                        sortBtns.appendChild(btn);
+                    });
+                    updateSortStyles();
+                    controlsContainer.appendChild(sortBtns);
+
                     // Filter buttons
                     const filterBtns = document.createElement('div');
-                    filterBtns.style.cssText = `display: flex; gap: 6px; margin-left: auto;`;
+                    filterBtns.style.cssText = `display: flex; gap: 6px;`;
 
                     const attrFilters = [
                         { name: 'All', icon: '🔄', color: '#8b6542' },
@@ -1505,7 +1864,8 @@ export class UIManager {
                         filterBtns.appendChild(btn);
                     });
                     updateFilterStyles();
-                    filterRow.appendChild(filterBtns);
+                    controlsContainer.appendChild(filterBtns);
+                    filterRow.appendChild(controlsContainer);
                     selectSection.appendChild(filterRow);
 
                     // Hero Grid Container (scrollable horizontally)
@@ -1555,6 +1915,95 @@ export class UIManager {
                         const entries = userHeroes instanceof Map
                             ? Array.from(userHeroes.entries())
                             : Object.entries(userHeroes);
+
+                        console.log(`[TeamDeployment] Sorting ${entries.length} heroes by ${currentSortMode}`);
+
+                        console.log(`[TeamDeployment] Sorting ${entries.length} heroes by ${currentSortMode}`);
+
+                        // Helper to calculate sort power more accurately
+                        const getSortPower = (h: any, id: string) => {
+                            // Try to get hero asset and config
+                            let heroName = h.heroCodeName;
+                            if (!heroName) {
+                                heroName = id.includes('_') ? id.split('_')[0] : id;
+                            }
+
+                            // Find config
+                            // We need to access the progressions. Since we can't easily import specific configs without a map,
+                            // we'll attempt to find it in HERO_ASSETS which links to configs or simple lookup
+
+                            // Fallback heuristic if we can't calculate full stats
+                            // But wait, we can try to get the hero definition from a global map if available.
+                            // The HeroUpgradeModal uses 'this.heroManager.getStatsAtLevel(level)'.
+
+                            // IMPROVED HEURISTIC matching the magnitude of real power (16k for lv1?? seems high but user said so)
+                            // User said Lv 1 is 16,753 power.
+                            // If Lv 1 is 16k, then base stats must be huge? Or equipment?
+                            // Ah, User might have ENDGAME equipment on a Lv 1 hero.
+
+                            const level = Number(h.level) || 1;
+                            const stars = Number(h.stars) || 1;
+
+                            // If we have equipment, add dummy power for them
+                            let equipmentPower = 0;
+                            if (h.equipment && Array.isArray(h.equipment)) {
+                                const equippedCount = h.equipment.filter((e: any) => e).length;
+                                equipmentPower = equippedCount * 2000; // rough estimate
+                            }
+
+                            // If base power is 16k at level 1, simple heuristic fails.
+                            // We heavily weight stars and equipment.
+
+                            // Let's try to simulate the formula:
+                            // Power = HP*0.1 + ATK*5 + ... 
+                            // A level 1 hero might have 5000 HP, 500 ATK...
+                            // 500 + 2500 = 3000. 
+                            // If Eq adds 10k... then 13k.
+
+                            // Since we can't easily run full calc without instantiating everything,
+                            // let's use a Hybrid Heuristic that scales similarly.
+                            // Or, if the hero object HAS 'power' property (check logs).
+
+                            if (h.combatPower) return Number(h.combatPower);
+
+                            // Revert to heuristic but aggressive on Stars since that's likely the multiplier
+                            // If user says Lv 1 is 16k, maybe stats are not scaled 1-100.
+
+                            // NEW FORMULA Attempt:
+                            // Base ~ 1000
+                            // Level * 200
+                            // Stars * 5000
+                            // Equipment?
+
+                            return (level * 200) + (stars * 5000) + equipmentPower;
+                        };
+
+                        entries.sort((a, b) => {
+                            const [idA, heroA] = a;
+                            const [idB, heroB] = b;
+
+                            if (currentSortMode === 'Power') {
+                                const powerA = getSortPower(heroA, idA);
+                                const powerB = getSortPower(heroB, idB);
+
+                                if (powerA !== powerB) {
+                                    // LOGGING TO DEBUG
+                                    // console.log(`[Sort] ${heroA.heroCodeName}: ${powerA} vs ${heroB.heroCodeName}: ${powerB}`);
+                                    return powerB - powerA;
+                                }
+                            }
+
+                            // Default / Primary Tie-breaker: Level descending
+                            const levelDiff = (Number(heroB.level) || 1) - (Number(heroA.level) || 1);
+                            if (levelDiff !== 0) return levelDiff;
+
+                            // Secondary Tie-breaker: Stars descending
+                            const starDiff = (Number(heroB.stars) || 1) - (Number(heroA.stars) || 1);
+                            if (starDiff !== 0) return starDiff;
+
+                            // Tertiary Tie-breaker: ID (stable sort)
+                            return idB.localeCompare(idA);
+                        });
 
                         if (entries.length === 0) {
                             const emptyMsg = document.createElement('div');
@@ -2130,11 +2579,20 @@ export class UIManager {
                 this.currentUser.gold = (this.currentUser.gold || 0) + item.coinAmount;
                 console.log(`Purchased ${item.coinAmount.toLocaleString()} coins. New total: ${this.currentUser.gold.toLocaleString()}`);
             } else if (item.itemType === 'tier1_item') {
-                // Add Item to Inventory
+                // Add Item to legacy Inventory (for backpack display)
                 if (!this.currentUser.inventory) this.currentUser.inventory = {};
                 const currentCount = this.currentUser.inventory[item.id] || 0;
                 this.currentUser.inventory[item.id] = currentCount + 1;
-                console.log(`Purchased ${item.name}. New quantity: ${this.currentUser.inventory[item.id]}`);
+
+                // Also add to new equipmentInventory (for Forge)
+                if (!this.currentUser.equipmentInventory) this.currentUser.equipmentInventory = [];
+                this.currentUser.equipmentInventory.push({ itemId: item.id, stars: 0 });
+
+                console.log(`Purchased ${item.name}. Backpack qty: ${this.currentUser.inventory[item.id]}, Equipment inv: ${this.currentUser.equipmentInventory.length}`);
+            } else if (item.itemType === 'material' && item.materialAmount) {
+                // Add material (Polishing Powder)
+                this.currentUser.polishingPowder = (this.currentUser.polishingPowder || 0) + item.materialAmount;
+                console.log(`Purchased ${item.materialAmount} Polishing Powder. New total: ${this.currentUser.polishingPowder}`);
             } else if (item.xpAmount) {
                 // Add XP
                 addPlayerXp(this.currentUser, item.xpAmount);
@@ -2214,6 +2672,7 @@ export class UIManager {
                     // Ensure Inventory exists
                     if (!this.currentUser) return; // Should not happen
                     if (!this.currentUser.inventory) this.currentUser.inventory = {};
+                    if (!this.currentUser.equipmentInventory) this.currentUser.equipmentInventory = [];
 
                     localStorage.setItem('awengers_session', JSON.stringify(startUser));
 

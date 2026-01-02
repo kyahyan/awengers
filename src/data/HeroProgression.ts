@@ -104,7 +104,7 @@ export const ORYX_HERO: HeroProgressionConfig = {
         gold: 50,
         soulPotion: 10
     },
-    costScaleFactor: 1.08,
+    costScaleFactor: 1.05,
 
     // Stat milestones for interpolation
     statMilestones: [
@@ -126,8 +126,8 @@ export const ORYX_HERO: HeroProgressionConfig = {
             icon: '⚡',
             ranks: [
                 { unlockLevel: 1, damagePercent: 150, cooldown: 9, description: 'Deals 150% Magic Damage.', effect: 'Single Target' },
-                { unlockLevel: 81, damagePercent: 180, cooldown: 9, description: 'Deals 180% Magic Damage.', effect: 'Adds Silence (1.5s)' },
-                { unlockLevel: 161, damagePercent: 220, cooldown: 9, description: 'Deals 220% Magic Damage.', effect: 'Enhanced Silence' },
+                { unlockLevel: 81, damagePercent: 180, cooldown: 9, description: 'Deals 180% Magic Damage.', effect: 'Adds Silence (1.5s, 6s ICD)' },
+                { unlockLevel: 161, damagePercent: 220, cooldown: 9, description: 'Deals 220% Magic Damage.', effect: 'Enhanced Silence (6s ICD)' },
                 { unlockLevel: 221, damagePercent: 250, cooldown: 8, description: 'Deals 250% Magic Damage.', effect: 'Pierce Effect (70% to enemy behind)' },
             ]
         },
@@ -204,7 +204,7 @@ export const SABLE_HERO: HeroProgressionConfig = {
         gold: 50,
         soulPotion: 10
     },
-    costScaleFactor: 1.08,
+    costScaleFactor: 1.05,
 
     // Stat milestones for interpolation
     statMilestones: [
@@ -346,14 +346,29 @@ export class HeroProgressionManager {
 
     /**
      * Returns the cost to level up from currentLevel to currentLevel + 1
-     * Formula: Base * (1.08 ^ currentLevel)
+     * Formula: Base * StepMultiplier * (1.05 ^ currentLevel)
+     * Step-scaling makes rank-up walls feel expensive, but leveling between feels rewarding
      */
     getNextLevelCost(currentLevel: number): LevelCost {
         const scale = this.config.costScaleFactor;
         const base = this.config.baseLevelCosts;
 
-        const goldCost = Math.floor(base.gold * Math.pow(scale, currentLevel));
-        const soulPotionCost = Math.floor(base.soulPotion * Math.pow(scale, currentLevel));
+        // Step-scaling multiplier based on level thresholds
+        let stepMultiplier = 1.0;
+        if (currentLevel >= 141) {
+            stepMultiplier = 12.0;
+        } else if (currentLevel >= 101) {
+            stepMultiplier = 7.0;
+        } else if (currentLevel >= 61) {
+            stepMultiplier = 4.0;
+        } else if (currentLevel >= 41) {
+            stepMultiplier = 2.5;
+        } else if (currentLevel >= 21) {
+            stepMultiplier = 1.5;
+        }
+
+        const goldCost = Math.floor(base.gold * stepMultiplier * Math.pow(scale, currentLevel));
+        const soulPotionCost = Math.floor(base.soulPotion * stepMultiplier * Math.pow(scale, currentLevel));
 
         return {
             gold: goldCost,
@@ -757,7 +772,7 @@ export const RAZOR_HERO: HeroProgressionConfig = {
         gold: 50,
         soulPotion: 10
     },
-    costScaleFactor: 1.08,
+    costScaleFactor: 1.05,
 
     // Stat milestones for interpolation
     statMilestones: [
@@ -816,9 +831,9 @@ export const RAZOR_HERO: HeroProgressionConfig = {
             description: 'A devastating finishing move.',
             icon: '🪓',
             ranks: [
-                { unlockLevel: 40, damagePercent: 500, cooldown: 40, description: '500% True Dmg.', effect: 'True Damage' },
-                { unlockLevel: 141, damagePercent: 750, cooldown: 35, description: '750% True Dmg.', effect: 'Massive Dmg' },
-                { unlockLevel: 250, damagePercent: 750, cooldown: 35, description: 'If Kill: Reset Cooldown.', effect: 'Reset' },
+                { unlockLevel: 40, damagePercent: 400, cooldown: 40, description: '400% True Dmg.', effect: 'True Damage' },
+                { unlockLevel: 141, damagePercent: 600, cooldown: 35, description: '600% True Dmg.', effect: 'Enhanced Damage' },
+                { unlockLevel: 250, damagePercent: 600, cooldown: 35, description: 'If Kill: 80% CD Reduction.', effect: 'Near-Reset' },
             ]
         }
     ],

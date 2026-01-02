@@ -79,7 +79,7 @@ app.post('/api/auth/register', async (req, res) => {
         // Token
         const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-        res.status(201).json({ token, user: { username: user.username, commanderName: user.commanderName, role: user.role } });
+        res.status(201).json({ token, user: sanitizeUser(user) });
     } catch (error) {
         res.status(500).json({ message: (error as Error).message });
     }
@@ -98,7 +98,7 @@ app.post('/api/auth/login', async (req, res) => {
 
         const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-        res.json({ token, user }); // Return full user profile for game load
+        res.json({ token, user: sanitizeUser(user) }); // Return full user profile for game load
     } catch (error) {
         res.status(500).json({ message: (error as Error).message });
     }
@@ -638,6 +638,41 @@ app.post('/api/hero/reset', async (req, res) => {
     }
 });
 
+// DEPLOY TEAM Endpoint
+app.post('/api/team/deploy', async (req, res) => {
+    try {
+        const { commanderName, teamInstanceIds } = req.body;
+        if (!commanderName || !teamInstanceIds || !Array.isArray(teamInstanceIds)) {
+            return res.status(400).json({ message: 'Missing fields or invalid team format' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        // Update deployed team
+        // We might want to validate that the user owns these hero instances, 
+        // but for now we trust the client to send valid IDs from its own list.
+        (user as any).deployedTeam = teamInstanceIds;
+
+        // Mark as modified since it might be a mixed type or new field
+        user.markModified('deployedTeam');
+
+        await user.save();
+
+        console.log(`[Deploy] ${commanderName} deployed team: ${teamInstanceIds.join(', ')}`);
+
+        res.json({
+            success: true,
+            deployedTeam: teamInstanceIds,
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Deploy Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
 // MIGRATE HEROES Endpoint - Fix attribute values for existing heroes
 app.post('/api/hero/migrate-attributes', async (req, res) => {
     try {
@@ -883,40 +918,77 @@ app.post('/api/hero/equip', async (req, res) => {
 
         // Validation for ItemId (if equipping)
         if (itemId) {
-            const inventory = user.inventory || new Map();
-            const count = inventory.get(itemId) || 0;
-            if (count < 1) {
-                return res.status(400).json({ message: 'Item not in inventory' });
+            // First check equipmentInventory (new format)
+            const equipmentInventory = userAny.equipmentInventory || [];
+            const itemIndex = equipmentInventory.findIndex((eq: any) => eq.itemId === itemId && !eq.equipped);
+
+            if (itemIndex === -1) {
+                // Fall back to legacy inventory
+                const inventory = user.inventory || new Map();
+                const count = inventory.get(itemId) || 0;
+                if (count < 1) {
+                    return res.status(400).json({ message: 'Item not in inventory' });
+                }
+
+                // Legacy inventory logic
+                // Unequip current if exists
+                const currentItem = hero.equipment[slotIndex];
+                if (currentItem) {
+                    inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
+                }
+
+                // Deduct new item
+                inventory.set(itemId, count - 1);
+                hero.equipment[slotIndex] = itemId;
+                user.inventory = inventory;
+            } else {
+                // New equipmentInventory logic
+                // Unequip current if exists
+                const currentItem = hero.equipment[slotIndex];
+                if (currentItem) {
+                    // Return item to inventory (mark as unequipped)
+                    const existingItem = equipmentInventory.find((eq: any) => eq.itemId === currentItem && eq.heroId === instanceId);
+                    if (existingItem) {
+                        existingItem.equipped = false;
+                        existingItem.heroId = undefined;
+                    }
+                }
+
+                // Mark the new item as equipped
+                equipmentInventory[itemIndex].equipped = true;
+                equipmentInventory[itemIndex].heroId = instanceId;
+
+                // Equip new item
+                hero.equipment[slotIndex] = itemId;
+                userAny.equipmentInventory = equipmentInventory;
+                user.markModified('equipmentInventory');
             }
-
-            // Unequip current if exists
-            const currentItem = hero.equipment[slotIndex];
-            if (currentItem) {
-                inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
-            }
-
-            // Deduct new item
-            inventory.set(itemId, count - 1);
-            // if (inventory.get(itemId) === 0) inventory.delete(itemId); 
-            // Keeping 0 is safer for now to avoid undefined checks elsewhere if logic relies on key existence
-
-            // Equip new item
-            hero.equipment[slotIndex] = itemId;
-            user.inventory = inventory; // Trigger update
         } else {
             // Unequip logic
             const currentItem = hero.equipment[slotIndex];
             if (currentItem) {
-                const inventory = user.inventory || new Map();
-                inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
+                // Check equipmentInventory first
+                const equipmentInventory = userAny.equipmentInventory || [];
+                const existingItem = equipmentInventory.find((eq: any) => eq.itemId === currentItem && eq.heroId === instanceId);
+
+                if (existingItem) {
+                    existingItem.equipped = false;
+                    existingItem.heroId = undefined;
+                    user.markModified('equipmentInventory');
+                } else {
+                    // Fall back to legacy inventory
+                    const inventory = user.inventory || new Map();
+                    inventory.set(currentItem, (inventory.get(currentItem) || 0) + 1);
+                    user.inventory = inventory;
+                    user.markModified('inventory');
+                }
+
                 hero.equipment[slotIndex] = null;
-                user.inventory = inventory;
             }
         }
 
         userAny.heroes.set(instanceId, hero);
         user.markModified('heroes');
-        user.markModified('inventory');
         await user.save();
 
         console.log(`[Equip] ${commanderName} updated slot ${slotIndex} on ${instanceId} with ${itemId || 'Empty'}`);
