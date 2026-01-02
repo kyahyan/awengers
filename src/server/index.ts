@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { connectDB } from './db.js';
 import { User } from './models/User.js';
+import { Server } from './models/Server.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +17,22 @@ app.use(express.json());
 
 // Connect to Database
 connectDB().then(async () => {
+    // Seed Servers
+    try {
+        const count = await Server.countDocuments();
+        if (count === 0) {
+            console.log('Seeding Servers...');
+            await Server.insertMany([
+                { id: "1", name: "Server 1 (Alpha)", limit: 100 },
+                { id: "2", name: "Server 2 (Beta)", limit: 100 },
+                { id: "3", name: "Server 3 (Gamma)", limit: 100 }
+            ]);
+            console.log('Servers seeded.');
+        }
+    } catch (e) {
+        console.error("Server Seeding Error:", e);
+    }
+
     // Seed Super Admin
     try {
         const adminExists = await User.findOne({ role: 'superadmin' });
@@ -36,11 +53,18 @@ connectDB().then(async () => {
                 rankIcon: 'Paw Print',
                 vipPoints: 100000,
                 gems: 999999,
-                gold: 999999999
+                gold: 999999999,
+                serverId: '1'
             });
             console.log('Super Admin Created: Commander "Admin", Password "admin123"');
         } else {
-            console.log('Super Admin already exists. Skipping reset.');
+            console.log('Super Admin already exists. Updating to Server 1...');
+            // Force move to Server 1 if not already
+            if (adminExists.serverId !== '1') {
+                adminExists.serverId = '1';
+                await adminExists.save();
+                console.log('Super Admin moved to Server 1.');
+            }
         }
     } catch (e) {
         console.error("Seeding Error:", e);
@@ -52,13 +76,50 @@ app.get('/', (_req, res) => {
     res.send('Awengers API is running');
 });
 
+const SERVER_LIMIT = 100;
+const SERVERS = [
+    { id: "1", name: "Server 1 (Alpha)" },
+    { id: "2", name: "Server 2 (Beta)" },
+    { id: "3", name: "Server 3 (Gamma)" }
+];
+
+// GET Servers with Population
+app.get('/api/servers', async (_req, res) => {
+    try {
+        const stats = await Promise.all(SERVERS.map(async (s) => {
+            const count = await User.countDocuments({ serverId: s.id });
+            return {
+                ...s,
+                count,
+                limit: SERVER_LIMIT,
+                isFull: count >= SERVER_LIMIT
+            };
+        }));
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
 // AUTH: Register
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { username, commanderName, password } = req.body;
+        const { username, commanderName, password, serverId } = req.body;
 
         // Validation
-        if (!username || !commanderName || !password) return res.status(400).json({ message: 'Missing fields' });
+        if (!username || !commanderName || !password || !serverId) {
+            return res.status(400).json({ message: 'Missing fields' });
+        }
+
+        // Validate Server
+        const validServer = SERVERS.find(s => s.id === serverId);
+        if (!validServer) return res.status(400).json({ message: 'Invalid Server ID' });
+
+        // Check Server Capacity
+        const serverCount = await User.countDocuments({ serverId });
+        if (serverCount >= SERVER_LIMIT) {
+            return res.status(400).json({ message: 'Server is full (Max 100 players)' });
+        }
 
         const existingUser = await User.findOne({ username });
         if (existingUser) return res.status(400).json({ message: 'Username taken' });
@@ -73,7 +134,8 @@ app.post('/api/auth/register', async (req, res) => {
         const user = await User.create({
             username,
             commanderName,
-            password: hashedPassword
+            password: hashedPassword,
+            serverId
         });
 
         // Token

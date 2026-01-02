@@ -117,24 +117,7 @@ export class GameManager {
         this.heroes = [];
         this.uiManager.setSelectedHeroes([]);
 
-        // Team of 12 Heroes (2D Sprites) - 6v6
-        // Left Team (iso-left sprites) - Front Row: Bull Assassin, Rabbit (middle), Bull Ranger
-        this.spawnHero("Bull Assassin Left", new THREE.Vector3(0, 0, 2), new THREE.Vector3(0, 0, -6));
-        this.spawnHero("Rabbit Ranger Left", new THREE.Vector3(3, 0, 2), new THREE.Vector3(3, 0, -6));
-        this.spawnHero("Bull Ranger Left", new THREE.Vector3(6, 0, 2), new THREE.Vector3(6, 0, -6));
-        // Left Team - Back Row: All Phoenix Rangers
-        this.spawnHero("Boar Assassin Left", new THREE.Vector3(0, 0, 5), new THREE.Vector3(0, 0, -6));
-        this.spawnHero("Antelope Mage Left", new THREE.Vector3(3, 0, 5), new THREE.Vector3(3, 0, -6));
-        this.spawnHero("Antelope Ranger Left", new THREE.Vector3(6, 0, 5), new THREE.Vector3(6, 0, -6));
-
-        // Right Team (iso-right sprites) - Front Row: Bull Assassin, Rabbit (middle), Bull Ranger
-        this.spawnHero("Bull Assassin", new THREE.Vector3(0, 0, -2), new THREE.Vector3(0, 0, 6));
-        this.spawnHero("Rabbit Ranger", new THREE.Vector3(3, 0, -2), new THREE.Vector3(3, 0, 6));
-        this.spawnHero("Bull Ranger", new THREE.Vector3(6, 0, -2), new THREE.Vector3(6, 0, 6));
-        // Right Team - Back Row: All Phoenix Rangers
-        this.spawnHero("Boar Assassin", new THREE.Vector3(0, 0, -5), new THREE.Vector3(0, 0, 6));
-        this.spawnHero("Antelope Mage", new THREE.Vector3(3, 0, -5), new THREE.Vector3(3, 0, 6));
-        this.spawnHero("Antelope Ranger", new THREE.Vector3(6, 0, -5), new THREE.Vector3(6, 0, 6));
+        // Cleared hardcoded test heroes to fix background ghosting
     }
 
     private spawnHero(name: string, position: THREE.Vector3, lookAt: THREE.Vector3): Hero | SpriteHero | undefined {

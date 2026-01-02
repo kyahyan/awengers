@@ -166,6 +166,7 @@ export interface UserProfile {
     maxXp: number; // XP needed for next level
 
     uid?: string; // Unique ID (mapped from MongoDB _id)
+    serverId?: string; // Server ID the user belongs to
     lastNameChangeTime?: number; // Timestamp of last name change
 
     // Rank Info

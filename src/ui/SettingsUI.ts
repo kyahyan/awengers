@@ -428,14 +428,28 @@ export class SettingsUI {
         nameGroup.appendChild(changeNameBtn);
         container.appendChild(nameGroup);
 
-        // 3. User ID
+        // 3. User ID & Server
+        const infoGroup = document.createElement('div');
+        infoGroup.style.display = 'flex';
+        infoGroup.style.flexDirection = 'column';
+        infoGroup.style.alignItems = 'center';
+        infoGroup.style.marginTop = 'auto'; // Push down
+        infoGroup.style.paddingTop = '30px';
+        infoGroup.style.gap = '5px';
+
         const uidLabel = document.createElement('div');
         uidLabel.innerText = `UID: ${this.currentUser.uid || 'N/A'}`;
         uidLabel.style.color = '#666';
         uidLabel.style.fontSize = '0.8rem';
-        uidLabel.style.marginTop = 'auto'; // Push down
-        uidLabel.style.paddingTop = '30px';
-        container.appendChild(uidLabel);
+        infoGroup.appendChild(uidLabel);
+
+        const serverLabel = document.createElement('div');
+        serverLabel.innerText = `Server: ${this.currentUser.serverId || '1'}`;
+        serverLabel.style.color = '#888';
+        serverLabel.style.fontSize = '0.8rem';
+        infoGroup.appendChild(serverLabel);
+
+        container.appendChild(infoGroup);
 
         this.charContent.appendChild(container);
     }

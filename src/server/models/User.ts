@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
     level: { type: Number, default: 1 },
     currentXp: { type: Number, default: 0 },
     maxXp: { type: Number, default: 100 },
+    serverId: { type: String, required: true, default: "1" },
 
     // Derived/Snapshot fields
     rankTitle: { type: String, default: "Scout" },
@@ -25,10 +26,10 @@ const userSchema = new mongoose.Schema({
     guildName: { type: String },
     favoriteHeroCodeName: { type: String, default: "Monkey King" },
 
-    gold: { type: Number, default: 1000 },
-    gems: { type: Number, default: 500 },
-    heroPotion: { type: Number, default: 100 },
-    soulPotion: { type: Number, default: 50 },
+    gold: { type: Number, default: 50000 },
+    gems: { type: Number, default: 1000 },
+    heroPotion: { type: Number, default: 1000 },
+    soulPotion: { type: Number, default: 1000 },
 
     // Use Map for Record<string, number>
     achievementsProgress: { type: Map, of: Number, default: {} },

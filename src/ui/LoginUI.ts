@@ -19,6 +19,9 @@ export class LoginUI {
                 <input type="text" id="login-username" placeholder="Username" />
                 <input type="text" id="login-commandername" placeholder="Commander Name (Display)" style="display:none;" />
                 <input type="password" id="login-password" placeholder="Password" />
+                <select id="login-server" style="display:none; padding: 12px; border-radius: 8px; font-size: 1rem; background: #333; color: white; border: 1px solid #555;">
+                    <option value="" disabled selected>Select Server...</option>
+                </select>
                 
                 <button id="btn-action">LOGIN</button>
                 
@@ -53,7 +56,7 @@ export class LoginUI {
                     text-transform: uppercase;
                     letter-spacing: 2px;
                 }
-                .login-box input {
+                .login-box input, .login-box select {
                     padding: 12px;
                     font-size: 1rem;
                     background: #333;
@@ -63,7 +66,7 @@ export class LoginUI {
                     outline: none;
                     transition: border-color 0.2s;
                 }
-                .login-box input:focus {
+                .login-box input:focus, .login-box select:focus {
                     border-color: #ffd700;
                 }
                 .login-box button {
@@ -111,18 +114,18 @@ export class LoginUI {
         this.container.querySelector('#btn-toggle-mode')?.addEventListener('click', () => this.toggleMode());
 
         this.setupInputListeners();
+        this.fetchServers(); // Preload servers
     }
 
     private setupInputListeners() {
-        // Fix: Stop key events from bubbling to game controls
-        const inputs = this.container.querySelectorAll('input');
+        const inputs = this.container.querySelectorAll('input, select');
         inputs.forEach(input => {
             input.addEventListener('keydown', (e) => e.stopPropagation());
             input.addEventListener('keyup', (e) => e.stopPropagation());
             input.addEventListener('keypress', (e) => e.stopPropagation());
 
             // Allow submitting with Enter key
-            input.addEventListener('keydown', (e) => {
+            input.addEventListener('keydown', (e: any) => {
                 if (e.key === 'Enter') {
                     this.handleAction();
                 }
@@ -130,10 +133,35 @@ export class LoginUI {
         });
     }
 
+    private async fetchServers() {
+        const select = this.container.querySelector('#login-server') as HTMLSelectElement;
+        if (!select) return;
+
+        try {
+            const res = await fetch('http://localhost:3000/api/servers');
+            const servers = await res.json();
+
+            select.innerHTML = '<option value="" disabled selected>Select Server...</option>';
+
+            servers.forEach((s: any) => {
+                const isFull = s.count >= s.limit;
+                const option = document.createElement('option');
+                option.value = s.id;
+                option.text = `${s.name} (${s.count}/${s.limit})${isFull ? ' [FULL]' : ''}`;
+                option.disabled = isFull;
+                select.appendChild(option);
+            });
+        } catch (e) {
+            console.error("Failed to fetch servers", e);
+            select.innerHTML = '<option value="" disabled>Server Error</option>';
+        }
+    }
+
     private toggleMode() {
         this.isRegisterMode = !this.isRegisterMode;
 
         const commanderInput = this.container.querySelector('#login-commandername') as HTMLElement;
+        const serverInput = this.container.querySelector('#login-server') as HTMLElement;
         const actionBtn = this.container.querySelector('#btn-action') as HTMLElement;
         const toggleLink = this.container.querySelector('#btn-toggle-mode') as HTMLElement;
         const msg = this.container.querySelector('#login-msg') as HTMLElement;
@@ -142,11 +170,14 @@ export class LoginUI {
 
         if (this.isRegisterMode) {
             commanderInput.style.display = 'block';
+            serverInput.style.display = 'block';
+            this.fetchServers(); // Refresh on switch
             actionBtn.innerText = "REGISTER";
             actionBtn.style.background = "linear-gradient(135deg, #3498db 0%, #2980b9 100%)";
             toggleLink.innerText = "Already have an account? Login";
         } else {
             commanderInput.style.display = 'none';
+            serverInput.style.display = 'none';
             actionBtn.innerText = "LOGIN";
             actionBtn.style.background = "linear-gradient(135deg, #f39c12 0%, #d35400 100%)";
             toggleLink.innerText = "New Commander? Create Account";
@@ -165,10 +196,15 @@ export class LoginUI {
         const username = (this.container.querySelector('#login-username') as HTMLInputElement).value;
         const commanderName = (this.container.querySelector('#login-commandername') as HTMLInputElement).value;
         const password = (this.container.querySelector('#login-password') as HTMLInputElement).value;
+        const serverId = (this.container.querySelector('#login-server') as HTMLSelectElement).value;
         const msg = this.container.querySelector('#login-msg') as HTMLElement;
 
         if (!username || !password || !commanderName) {
             msg.innerText = "All fields required for Register";
+            return;
+        }
+        if (!serverId) {
+            msg.innerText = "Please select a server";
             return;
         }
 
@@ -177,7 +213,7 @@ export class LoginUI {
             const response = await fetch('http://localhost:3000/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, commanderName, password })
+                body: JSON.stringify({ username, commanderName, password, serverId })
             });
             const data = await response.json();
 
