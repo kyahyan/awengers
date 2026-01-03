@@ -549,22 +549,30 @@ export class HeroList {
 
         if (asset && asset.sprite2D) {
             const displaySize = 180; // Match card size (updated by user)
-            const framesPerRow = asset.sprite2D.framesPerRow;
-            const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
-            const scaledSheetWidth = framesPerRow * displaySize;
-            const scaledSheetHeight = totalRows * displaySize;
+
+            // Derive portrait path from spritesheet path
+            // e.g., "/assets/Character/heroes/antelope_mage_with_animation_spritesheets/side-left/..." 
+            // -> "/assets/Character/heroes/antelope_mage_with_animation_spritesheets/portrait/antelope mage.jpg"
+            const spritePath = asset.sprite2D.spritesheetPath;
+            const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+
+            let portraitPath = '';
+            if (heroFolderMatch) {
+                const heroFolder = heroFolderMatch[1];
+                // Convert folder name to portrait filename
+                // e.g., "antelope_mage_with_animation_spritesheets" -> "antelope mage"
+                const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace(/_/g, ' ');
+                portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+            }
 
             const spritePreview = document.createElement('div');
             spritePreview.style.cssText = `
                 width: ${displaySize}px;
                 height: ${displaySize}px;
-                background-image: url('${asset.sprite2D.spritesheetPath}');
-                background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                background-position: 0 0;
+                background-image: url('${portraitPath}');
+                background-size: cover;
+                background-position: center;
                 background-repeat: no-repeat;
-                /* Scale to zoom in on the character face/body */
-                transform: scale(3.5) translateY(10%) translateX(4%); 
-                transform-origin: center center;
                 filter: saturate(1.1) contrast(1.1);
             `;
             imgContainer.appendChild(spritePreview);

@@ -254,12 +254,12 @@
                     <option value="#ff00ff">Magenta Screen</option>
                     <option value="#000000">Black</option>
                 </select>
-                <label>Brightness:</label>
-                <input type="range" id="brightness" min="0.5" max="2" step="0.1" value="1.2">
-                <label>Contrast:</label>
-                <input type="range" id="contrast" min="0.5" max="2" step="0.1" value="1.0">
-                <label>Saturation:</label>
-                <input type="range" id="saturation" min="0.5" max="2" step="0.1" value="1.3">
+                <label>Brightness: <span id="brightness-val">1.4</span></label>
+                <input type="range" id="brightness" min="0.5" max="3" step="0.1" value="1.4">
+                <label>Contrast: <span id="contrast-val">1.15</span></label>
+                <input type="range" id="contrast" min="0.5" max="2" step="0.05" value="1.15">
+                <label>Saturation: <span id="saturation-val">1.4</span></label>
+                <input type="range" id="saturation" min="0.5" max="2.5" step="0.1" value="1.4">
 
                 <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
                     <input type="checkbox" id="pingpong-loop" style="width: 18px; height: 18px;">
@@ -269,8 +269,6 @@
                 <label>Camera View:</label>
                 <div class="camera-presets" style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button type="button" class="cam-btn" data-view="front">Front View</button>
-                    <button type="button" class="cam-btn" data-view="isoleft">Iso Left (My Team)</button>
-                    <button type="button" class="cam-btn" data-view="isoright">Iso Right (Enemy)</button>
                     <button type="button" class="cam-btn" data-view="myteam">Side Left</button>
                     <button type="button" class="cam-btn" data-view="enemy">Side Right</button>
                 </div>
@@ -367,10 +365,20 @@
         const logEl = document.getElementById('log');
         const spritePreviewEl = document.getElementById('sprite-preview');
 
-        // Three.js Setup
-        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, preserveDrawingBuffer: true });
+        // Three.js Setup with enhanced color output
+        const renderer = new THREE.WebGLRenderer({
+            canvas,
+            alpha: true,
+            preserveDrawingBuffer: true,
+            antialias: true,
+            powerPreference: 'high-performance'
+        });
         renderer.setSize(512, 512);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        // ACES Filmic Tone Mapping for richer, more vibrant colors
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
@@ -380,21 +388,35 @@
         controls.target.set(0, 1, 0);
         controls.update();
 
-        // Lighting - Brighter for sprite export
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // Increased from 0.6
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Increased from 1
-        directionalLight.position.set(5, 10, 7);
-        scene.add(directionalLight);
+        // Enhanced Lighting System for Vibrant Character Colors
 
-        // Fill light from front for better visibility
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        fillLight.position.set(0, 5, 10);
+        // Hemisphere light for natural sky/ground ambient (blue sky, warm ground)
+        const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x806040, 0.8);
+        hemiLight.position.set(0, 20, 0);
+        scene.add(hemiLight);
+
+        // Soft ambient fill for base illumination
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        scene.add(ambientLight);
+
+        // Main Key Light - Warm white from front-top-right
+        const keyLight = new THREE.DirectionalLight(0xffffee, 1.8);
+        keyLight.position.set(3, 8, 5);
+        scene.add(keyLight);
+
+        // Fill Light - Cooler, softer from the left side
+        const fillLight = new THREE.DirectionalLight(0xeeeeff, 1.0);
+        fillLight.position.set(-4, 4, 3);
         scene.add(fillLight);
 
-        // Rim light from behind for depth
-        const rimLight = new THREE.DirectionalLight(0xaaddff, 0.5);
-        rimLight.position.set(0, 5, -10);
+        // Front Fill - Ensures face/front details are visible
+        const frontFill = new THREE.DirectionalLight(0xffffff, 0.6);
+        frontFill.position.set(0, 3, 8);
+        scene.add(frontFill);
+
+        // Rim/Back Light - Subtle edge definition
+        const rimLight = new THREE.DirectionalLight(0xaaccff, 0.5);
+        rimLight.position.set(0, 6, -8);
         scene.add(rimLight);
 
         // State
@@ -404,13 +426,31 @@
         let selectedAnimationIndex = -1;
         let activeBreathingAction = null; // Track action for manual sine-wave control
 
-        // Brightness slider updates lighting in real-time
+        // Slider value display and real-time updates
+        const contrastSlider = document.getElementById('contrast');
+
+        function updateSliderLabels() {
+            document.getElementById('brightness-val').textContent = brightnessSlider.value;
+            document.getElementById('contrast-val').textContent = contrastSlider.value;
+            document.getElementById('saturation-val').textContent = saturationSlider.value;
+        }
+
+        // Brightness updates lighting and tone mapping exposure in real-time
         brightnessSlider.addEventListener('input', () => {
             const brightness = parseFloat(brightnessSlider.value);
-            ambientLight.intensity = brightness;
-            directionalLight.intensity = brightness * 1.2;
-            fillLight.intensity = brightness * 0.6;
+            // Adjust light intensities proportionally
+            ambientLight.intensity = brightness * 0.7;
+            keyLight.intensity = brightness * 1.3;
+            fillLight.intensity = brightness * 0.7;
+            frontFill.intensity = brightness * 0.45;
+            hemiLight.intensity = brightness * 0.6;
+            // Also adjust tone mapping exposure for overall brightness
+            renderer.toneMappingExposure = brightness * 0.85;
+            updateSliderLabels();
         });
+
+        contrastSlider.addEventListener('input', updateSliderLabels);
+        saturationSlider.addEventListener('input', updateSliderLabels);
 
         // Ping-pong checkbox updates animation loop mode in real-time
         document.getElementById('pingpong-loop').addEventListener('change', () => {
@@ -426,20 +466,6 @@
                 camera.position.set(0, modelHeight * 0.5, modelHeight * 2.5);
                 camera.lookAt(0, modelHeight * 0.5, 0);
                 controls.target.set(0, modelHeight * 0.5, 0);
-            },
-            isoleft: () => {
-                // Iso Left (My Team) - View from Behind-Left (See the back of the unit like Player Team)
-                // Positioned behind (-Z) and to the left (-X)
-                camera.position.set(-modelHeight * 2, modelHeight * 1.5, -modelHeight * 2);
-                camera.lookAt(0, modelHeight * 0.3, 0);
-                controls.target.set(0, modelHeight * 0.3, 0);
-            },
-            isoright: () => {
-                // Iso Right (Enemy) - View from Front-Right (See the front of the unit like Enemy Team)
-                // Positioned in front (+Z) and to the right (+X)
-                camera.position.set(modelHeight * 2, modelHeight * 1.5, modelHeight * 2);
-                camera.lookAt(0, modelHeight * 0.3, 0);
-                controls.target.set(0, modelHeight * 0.3, 0);
             },
             myteam: () => {
                 // Side Left
@@ -608,31 +634,39 @@
 
                     object.traverse(child => {
                         if (child.isMesh) {
+                            // Enhanced material settings for vibrant, smooth character appearance
                             const materialOptions = {
                                 map: texture,
-                                roughness: 0.5,
-                                metalness: 0.1
+                                // Lower roughness for smoother, more polished look
+                                roughness: 0.35,
+                                // Minimal metalness for character sprites
+                                metalness: 0.05,
+                                // Slightly boost the base color to counteract any darkening
+                                envMapIntensity: 0.3
                             };
 
                             if (normalMap) {
                                 materialOptions.normalMap = normalMap;
-                                materialOptions.normalScale = new THREE.Vector2(1, 1);
+                                // Reduce normal strength slightly for smoother appearance
+                                materialOptions.normalScale = new THREE.Vector2(0.8, 0.8);
                             }
 
                             if (emissionMap) {
                                 materialOptions.emissiveMap = emissionMap;
                                 materialOptions.emissive = new THREE.Color(0xffffff);
-                                materialOptions.emissiveIntensity = 0.5;
+                                // Slightly higher emission for glowing effects
+                                materialOptions.emissiveIntensity = 0.6;
                             }
 
                             if (aoMap) {
                                 materialOptions.aoMap = aoMap;
-                                materialOptions.aoMapIntensity = 1.0;
+                                // Reduced AO to prevent over-darkening
+                                materialOptions.aoMapIntensity = 0.6;
                             }
 
                             if (metallicMap) {
                                 materialOptions.metalnessMap = metallicMap;
-                                materialOptions.metalness = 0.5;
+                                materialOptions.metalness = 0.4;
                             }
 
                             child.material = new THREE.MeshStandardMaterial(materialOptions);
@@ -753,11 +787,9 @@
 
         // Export all animations from all camera views into a ZIP
         exportAllBtn.addEventListener('click', async () => {
-            const viewNames = ['front', 'isoleft', 'isoright', 'myteam', 'enemy'];
+            const viewNames = ['front', 'myteam', 'enemy'];
             const viewLabels = {
                 front: 'front-view',
-                isoleft: 'iso-left',
-                isoright: 'iso-right',
                 myteam: 'side-left',
                 enemy: 'side-right'
             };
@@ -833,15 +865,19 @@
             log(`Exporting "${clip.name}": ${totalFrameCount} frames @ ${fps}fps${breathingEnabled ? ' (Breathing Sine)' : ''}`);
             log(`Grid: ${columns}x${rows}, Super-sampling: ${renderSize}px -> ${frameSize}px`);
 
-            // Setup offscreen renderer with anti-aliasing enabled
+            // Setup offscreen renderer with anti-aliasing and tone mapping
             const offscreenRenderer = new THREE.WebGLRenderer({
                 alpha: bgColor === 'transparent',
                 preserveDrawingBuffer: true,
-                antialias: true // Enable hardware anti-aliasing
+                antialias: true,
+                powerPreference: 'high-performance'
             });
-            offscreenRenderer.setSize(renderSize, renderSize); // Render at 2x resolution
+            offscreenRenderer.setSize(renderSize, renderSize);
             offscreenRenderer.outputColorSpace = THREE.SRGBColorSpace;
             offscreenRenderer.setPixelRatio(1);
+            // Match preview renderer tone mapping for consistent colors
+            offscreenRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+            offscreenRenderer.toneMappingExposure = renderer.toneMappingExposure;
 
             if (bgColor !== 'transparent') {
                 offscreenRenderer.setClearColor(bgColor, 1);
@@ -969,15 +1005,18 @@
             // 2x Super-sampling
             const renderSize = frameSize * 2;
 
-            // Setup offscreen renderer with anti-aliasing
+            // Setup offscreen renderer with anti-aliasing and tone mapping
             const offscreenRenderer = new THREE.WebGLRenderer({
                 alpha: bgColor === 'transparent',
                 preserveDrawingBuffer: true,
-                antialias: true
+                antialias: true,
+                powerPreference: 'high-performance'
             });
             offscreenRenderer.setSize(renderSize, renderSize);
             offscreenRenderer.outputColorSpace = THREE.SRGBColorSpace;
             offscreenRenderer.setPixelRatio(1);
+            offscreenRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+            offscreenRenderer.toneMappingExposure = renderer.toneMappingExposure;
 
             if (bgColor !== 'transparent') {
                 offscreenRenderer.setClearColor(bgColor, 1);
@@ -1083,11 +1122,14 @@
             const offscreenRenderer = new THREE.WebGLRenderer({
                 alpha: bgColor === 'transparent',
                 preserveDrawingBuffer: true,
-                antialias: true
+                antialias: true,
+                powerPreference: 'high-performance'
             });
             offscreenRenderer.setSize(renderSize, renderSize);
             offscreenRenderer.outputColorSpace = THREE.SRGBColorSpace;
             offscreenRenderer.setPixelRatio(1);
+            offscreenRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+            offscreenRenderer.toneMappingExposure = renderer.toneMappingExposure;
 
             if (bgColor !== 'transparent') {
                 offscreenRenderer.setClearColor(bgColor, 1);

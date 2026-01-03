@@ -242,6 +242,7 @@ export class HeaderUI {
         const buttons = [
             { key: 'HOME', label: 'Home', icon: '/assets/home/home.png', size: 150 },
             { key: 'HEROES', label: 'Heroes', icon: '/assets/home/heroes.png', size: 140 },
+            { key: 'SHARDS', label: 'Shards', icon: '/assets/item/shard-item/Tier 1/Ring of Life - shard.png', size: 140 },
             { key: 'SUMMON', label: 'Summon', icon: '/assets/home/summon.png', size: 120 },
             { key: 'FORGE', label: 'Forge', icon: '/assets/home/forge.png', size: 140 },
             { key: 'BACKPACK', label: 'Backpack', icon: '/assets/home/backpack.png', size: 150 },

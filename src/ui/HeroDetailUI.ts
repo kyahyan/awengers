@@ -3,21 +3,21 @@ import { HERO_ASSETS } from '../data/HeroAssetsMap';
 
 // Mapping for heroes without explicit sprite configs
 const HERO_SPRITE_MAP: Record<string, { path: string; frames: number; fps: number }> = {
-    'Antelope Mage': { path: '/assets/heroes/antelope_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Antelope Ranger': { path: '/assets/heroes/antelope_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Boar Assassin': { path: '/assets/heroes/boar_assassin_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_001_spritesheet.png', frames: 14, fps: 12 },
-    'Bull Assassin': { path: '/assets/heroes/bull_assassin_with_anim_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Bull Mage': { path: '/assets/heroes/bull_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Bull Ranger': { path: '/assets/heroes/bull_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Crocodile Assassin': { path: '/assets/heroes/crocodile_assassin_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Crocodile Knight': { path: '/assets/heroes/crocodile_knight_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Crocodile Mage': { path: '/assets/heroes/crocodile_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Crocodile Warrior': { path: '/assets/heroes/crocodile_warrior_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Dog Mage': { path: '/assets/heroes/dog_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Dog Ranger': { path: '/assets/heroes/dog_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Dog Warrior': { path: '/assets/heroes/dog_warrior_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Elephant Mage': { path: '/assets/heroes/elephant_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
-    'Rabbit Ranger': { path: '/assets/heroes/Mythic/rabbit_ranger_heavy_artillery_pioneer_with_anim_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 48, fps: 24 },
+    'Antelope Mage': { path: '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Antelope Ranger': { path: '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Boar Assassin': { path: '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_001_spritesheet.png', frames: 14, fps: 12 },
+    'Bull Assassin': { path: '/assets/Character/heroes/bull_assassin_with_anim_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Bull Mage': { path: '/assets/Character/heroes/bull_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Bull Ranger': { path: '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Crocodile Assassin': { path: '/assets/Character/heroes/crocodile_assassin_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Crocodile Knight': { path: '/assets/Character/heroes/crocodile_knight_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Crocodile Mage': { path: '/assets/Character/heroes/crocodile_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Crocodile Warrior': { path: '/assets/Character/heroes/crocodile_warrior_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Dog Mage': { path: '/assets/Character/heroes/dog_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Dog Ranger': { path: '/assets/Character/heroes/dog_ranger_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Dog Warrior': { path: '/assets/Character/heroes/dog_warrior_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Elephant Mage': { path: '/assets/Character/heroes/elephant_mage_with_animation_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 14, fps: 12 },
+    'Rabbit Ranger': { path: '/assets/Character/heroes/Mythic/rabbit_ranger_heavy_artillery_pioneer_with_anim_spritesheets/front-view/Armature_Armature_idle_Base_Layer_spritesheet.png', frames: 48, fps: 24 },
 };
 
 export class HeroDetailUI {

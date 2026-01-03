@@ -69,26 +69,26 @@ export class HeroUpgradeModal {
         if (heroNameLower.includes('ranger') || heroNameLower.includes('sable')) {
             this.heroManager = createSableHero(heroLevel, heroInstance);
             this.skillIconPaths = {
-                'wind_piercer': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Wind-Piercer.png',
-                'back_kick_vault': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Back-Kick Vault.png',
-                'hunters_mark': "/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Hunter's Mark.png",
-                'spirit_barrage': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Spirit Barrage.png'
+                'wind_piercer': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Wind-Piercer.png',
+                'back_kick_vault': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Back-Kick Vault.png',
+                'hunters_mark': "/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Hunter's Mark.png",
+                'spirit_barrage': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Spirit Barrage.png'
             };
         } else if (heroNameLower.includes('razor') || heroNameLower.includes('assassin')) {
             this.heroManager = createRazorHero(heroLevel, heroInstance);
             this.skillIconPaths = {
-                'tusk_gore': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Tusk Gore.png',
-                'wild_charge': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Wild Charge.png',
-                'blood_scent': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
-                'guillotine_breaker': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
+                'tusk_gore': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Tusk Gore.png',
+                'wild_charge': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Wild Charge.png',
+                'blood_scent': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
+                'guillotine_breaker': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
             };
         } else {
             this.heroManager = createOryxHero(heroLevel, heroInstance);
             this.skillIconPaths = {
-                'horn_bolt': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Horn Bolt.png',
-                'astral_leap': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Astral Leap.png',
-                'static_hooves': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Static Hooves.png',
-                'natures_wrath': "/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Nature's Wrath.png"
+                'horn_bolt': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Horn Bolt.png',
+                'astral_leap': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Astral Leap.png',
+                'static_hooves': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Static Hooves.png',
+                'natures_wrath': "/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Nature's Wrath.png"
             };
         }
 
@@ -642,14 +642,14 @@ export class HeroUpgradeModal {
     }
 
     private renderSprite(container: HTMLElement) {
-        let heroBasePath = '/assets/heroes/antelope_mage_with_animation_spritesheets';
+        let heroBasePath = '/assets/Character/heroes/antelope_mage_with_animation_spritesheets';
         let spriteFilename = 'Armature_Armature_idle_Base_Layer_spritesheet.png';
         const nameLower = this.heroAssetName.toLowerCase();
 
         if (nameLower.includes('ranger')) {
-            heroBasePath = '/assets/heroes/antelope_ranger_with_animation_spritesheets';
+            heroBasePath = '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets';
         } else if (nameLower.includes('razor')) {
-            heroBasePath = '/assets/heroes/boar_assassin_with_animation_spritesheets';
+            heroBasePath = '/assets/Character/heroes/boar_assassin_with_animation_spritesheets';
             spriteFilename = 'Armature_Armature_idle_Base_Layer_001_spritesheet.png';
         }
 
@@ -1014,19 +1014,10 @@ export class HeroUpgradeModal {
         const heroMainStat = this.heroManager.getConfig().mainStat;
         // Map stat to attribute icon and color
         const attrColorMap = { 'STR': '#dc2626', 'AGI': '#16a34a', 'INT': '#2563eb' };
+        const attrIconMap = { 'STR': '/assets/attr/attribute/str.svg', 'AGI': '/assets/attr/attribute/agi.svg', 'INT': '/assets/attr/attribute/int.svg' };
 
         const attrColor = attrColorMap[heroMainStat] || '#1f2937';
-
-        // Inline SVGs (White fill)
-        const fistSvg = `<svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M19.14,12.94c0.04-0.36,0.06-0.72,0.06-1.09c0-4.08-2.61-7.53-6.23-8.87C12.78,2.44,12.4,2,12,2S11.22,2.44,11.03,2.98C7.41,4.32,4.8,7.77,4.8,11.85c0,0.37,0.02,0.73,0.06,1.09C4.84,13.14,5,13.29,5.22,13.29h1.56c0.16,0,0.31-0.08,0.39-0.22c0.4-0.66,0.92-1.25,1.52-1.74c0.11-0.09,0.15-0.24,0.1-0.38L8.27,9.63c-0.12-0.34-0.03-0.73,0.22-0.98c0.26-0.25,0.65-0.32,0.98-0.17l0.87,0.39C10.68,8.99,11.05,9,11.41,8.91c0.43-0.11,0.68-0.54,0.57-0.97l-0.3-1.18c-0.09-0.35,0.02-0.72,0.29-0.97C12.23,5.54,12.63,5.46,12.97,5.6l0.87,0.38c0.35,0.15,0.74,0.08,1.01-0.19l1.63-1.63c0.39-0.39,1.02-0.39,1.41,0c0.39,0.39,0.39,1.02,0,1.41l-1.63,1.63c-0.27,0.27-0.35,0.66-0.19,1.01l0.38,0.87c0.14,0.31,0.05,0.68-0.21,0.91c-0.26,0.24-0.64,0.29-0.95,0.14l-0.87-0.39c-0.35-0.16-0.75-0.08-1.02,0.2l-0.23,0.23C13.04,9.39,13,9.65,13.06,9.89c0.41,1.56,1.83,2.71,3.53,2.71h1.56C18.66,12.6,18.99,12.97,19.14,12.94z M6,15v4c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2v-4H6z"/></svg>`;
-
-        const bowSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M12 12v10"/><path d="m19 19-7-7"/></svg>`;
-
-        const staffSvg = `<svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M12.5,2.5l-2,2l8,8l2-2L12.5,2.5z M9.5,8.5l-7,7l2,2l7-7L9.5,8.5z M18.5,14.5l-2,2l3.5,3.5l2-2L18.5,14.5z"/></svg>`;
-
-        let attrSvg = fistSvg;
-        if (heroMainStat === 'AGI') attrSvg = bowSvg;
-        if (heroMainStat === 'INT') attrSvg = staffSvg;
+        const attrIconPath = attrIconMap[heroMainStat] || '/assets/attr/attribute/str.svg';
 
         const asset = HERO_ASSETS.find(a => a.name === this.heroAssetName);
 
@@ -1056,21 +1047,26 @@ export class HeroUpgradeModal {
 
             if (asset && asset.sprite2D) {
                 const displaySize = 70; // Match box size
-                const framesPerRow = asset.sprite2D.framesPerRow;
-                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
-                const scaledSheetWidth = framesPerRow * displaySize;
-                const scaledSheetHeight = totalRows * displaySize;
+
+                // Derive portrait path from spritesheet path
+                const spritePath = asset.sprite2D.spritesheetPath;
+                const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+
+                let portraitPath = '';
+                if (heroFolderMatch) {
+                    const heroFolder = heroFolderMatch[1];
+                    const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace(/_/g, ' ');
+                    portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+                }
 
                 const spritePreview = document.createElement('div');
                 spritePreview.style.cssText = `
                     width: ${displaySize}px;
                     height: ${displaySize}px;
-                    background-image: url('${asset.sprite2D.spritesheetPath}');
-                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                    background-position: 0 0;
+                    background-image: url('${portraitPath}');
+                    background-size: cover;
+                    background-position: center;
                     background-repeat: no-repeat;
-                    transform: scale(5) translateY(-12%); 
-                    transform-origin: center center;
                     filter: saturate(1.1) contrast(1.1);
                 `;
                 imgContainer.appendChild(spritePreview);
@@ -1094,7 +1090,7 @@ export class HeroUpgradeModal {
                         background: ${attrColor}; border: 1px solid #fff; border-radius: 50%;
                         display: flex; justify-content: center; align-items: center; z-index: 10;
                     ">
-                        ${attrSvg}
+                        <img src="${attrIconPath}" style="width: 12px; height: 12px; filter: brightness(0) invert(1);" />
                     </div>
 
                     <!-- Level (Top Right) -->
@@ -1452,18 +1448,23 @@ export class HeroUpgradeModal {
                 let heroPreview = '<div style="font-size: 24px;">🦸</div>';
                 if (asset?.sprite2D) {
                     const displaySize = 60;
-                    const framesPerRow = asset.sprite2D.framesPerRow;
-                    const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
-                    const scaledSheetWidth = framesPerRow * displaySize;
-                    const scaledSheetHeight = totalRows * displaySize;
+                    // Derive portrait path from spritesheet path
+                    const spritePath = asset.sprite2D.spritesheetPath;
+                    const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+
+                    let portraitPath = '';
+                    if (heroFolderMatch) {
+                        const heroFolder = heroFolderMatch[1];
+                        const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace(/_/g, ' ');
+                        portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+                    }
+
                     heroPreview = `
                         <div style="
                             width: ${displaySize}px; height: ${displaySize}px;
-                            background-image: url('${asset.sprite2D.spritesheetPath}');
-                            background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                            background-position: 0 0;
-                            transform: scale(3.5) translateY(-10%);
-                            transform-origin: center center;
+                            background-image: url('${portraitPath}');
+                            background-size: cover;
+                            background-position: center;
                         "></div>
                     `;
                 }

@@ -57,7 +57,7 @@ const TREANT: EnemyDefinition = {
     name: 'Treant',
     displayName: 'Ancient Treant',
     type: 'normal',
-    icon: '/assets/enemy/demo-enemy/Treant_with_anim_spritesheets/front-view/Armature_Armature_Treant_Pose_Base_Layer_spritesheet.png',
+    icon: '/assets/Character/enemy/demo-enemy/Treant_with_anim_spritesheets/front-view/Armature_Armature_Treant_Pose_Base_Layer_spritesheet.png',
     baseStats: {
         hp: 800,
         atk: 45,
@@ -66,7 +66,7 @@ const TREANT: EnemyDefinition = {
         crit: '5%'
     },
     sprite: {
-        basePath: '/assets/enemy/demo-enemy/Treant_with_anim_spritesheets/iso-right/',
+        basePath: '/assets/Character/enemy/demo-enemy/Treant_with_anim_spritesheets/iso-right/',
         frameSize: 512, // Estimated frame size
         animations: {
             idle: {

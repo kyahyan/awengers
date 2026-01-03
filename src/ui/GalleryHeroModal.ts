@@ -33,28 +33,28 @@ export class GalleryHeroModal {
             // Sable - Antelope Ranger
             this.heroManager = createSableHero(heroLevel);
             this.skillIconPaths = {
-                'wind_piercer': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Wind-Piercer.png',
-                'back_kick_vault': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Back-Kick Vault.png',
-                'hunters_mark': "/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Hunter's Mark.png",
-                'spirit_barrage': '/assets/heroes/antelope_ranger_with_animation_spritesheets/skills/Spirit Barrage.png'
+                'wind_piercer': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Wind-Piercer.png',
+                'back_kick_vault': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Back-Kick Vault.png',
+                'hunters_mark': "/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Hunter's Mark.png",
+                'spirit_barrage': '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets/skills/Spirit Barrage.png'
             };
         } else if (heroNameLower.includes('razor')) {
             // Razor - Boar Assassin
             this.heroManager = createRazorHero(heroLevel);
             this.skillIconPaths = {
-                'tusk_gore': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Tusk Gore.png',
-                'wild_charge': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Wild Charge.png',
-                'blood_scent': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
-                'guillotine_breaker': '/assets/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
+                'tusk_gore': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Tusk Gore.png',
+                'wild_charge': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Wild Charge.png',
+                'blood_scent': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
+                'guillotine_breaker': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
             };
         } else {
             // Default: Oryx - Antelope Mage
             this.heroManager = createOryxHero(heroLevel);
             this.skillIconPaths = {
-                'horn_bolt': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Horn Bolt.png',
-                'astral_leap': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Astral Leap.png',
-                'static_hooves': '/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Static Hooves.png',
-                'natures_wrath': "/assets/heroes/antelope_mage_with_animation_spritesheets/skills/Nature's Wrath.png"
+                'horn_bolt': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Horn Bolt.png',
+                'astral_leap': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Astral Leap.png',
+                'static_hooves': '/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Static Hooves.png',
+                'natures_wrath': "/assets/Character/heroes/antelope_mage_with_animation_spritesheets/skills/Nature's Wrath.png"
             };
         }
 
@@ -68,13 +68,13 @@ export class GalleryHeroModal {
         const heroPower = this.calculateHeroPower(stats, skills, heroLevel);
 
         // Determine front-view sprite path based on hero
-        let heroBasePath = '/assets/heroes/antelope_mage_with_animation_spritesheets';
+        let heroBasePath = '/assets/Character/heroes/antelope_mage_with_animation_spritesheets';
         let spriteFilename = 'Armature_Armature_idle_Base_Layer_spritesheet.png';
 
         if (heroNameLower.includes('ranger')) {
-            heroBasePath = '/assets/heroes/antelope_ranger_with_animation_spritesheets';
+            heroBasePath = '/assets/Character/heroes/antelope_ranger_with_animation_spritesheets';
         } else if (heroNameLower.includes('razor')) {
-            heroBasePath = '/assets/heroes/boar_assassin_with_animation_spritesheets';
+            heroBasePath = '/assets/Character/heroes/boar_assassin_with_animation_spritesheets';
             spriteFilename = 'Armature_Armature_idle_Base_Layer_001_spritesheet.png';
         }
 

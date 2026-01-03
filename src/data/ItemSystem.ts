@@ -55,6 +55,29 @@ export interface ItemInstance {
     stars: number;  // 0-5
 }
 
+// ==================== SHARD SYSTEM ====================
+
+export const SHARD_REQUIREMENTS: Record<ItemTier, number> = {
+    1: 20,
+    2: 100,
+    3: 350,
+    4: 500
+};
+
+// Map Shard ID -> Item ID (Base Item for that shard)
+// Currently only Tier 1 shards are explicitly defined in loot system, but logic might expand.
+// We'll define mappings for known shards.
+export const SHARD_TO_ITEM_MAPPING: Record<string, string> = {
+    'ring_of_life_shard': 'ring_life',
+    'iron_leaf_shard': 'iron_leaf',
+    'swift_paw_shard': 'swift_paw',
+    'wisdom_plume_shard': 'wisdom_plume',
+    'turtle_shell_shard': 'turtle_shell',
+    'vampire_tooth_shard': 'vampire_tooth',
+    'bear_claw_shard': 'bear_claw',
+    'basic_boots_shard': 'basic_boots'
+};
+
 // ==================== TIER 1: BASIC MATERIALS (Common) ====================
 
 export const TIER1_ITEMS: Record<string, ItemDefinition> = {
@@ -537,6 +560,29 @@ export function canCraftItem(
  */
 export function getItemsByTier(tier: ItemTier): ItemDefinition[] {
     return Object.values(ALL_ITEMS).filter(item => item.tier === tier);
+}
+
+/**
+ * Check if player can build an item from shards
+ */
+export function canBuildFromShards(
+    shardId: string,
+    inventory: Record<string, number>
+): { canBuild: boolean; item?: ItemDefinition; cost?: number; reason?: string } {
+    const itemId = SHARD_TO_ITEM_MAPPING[shardId];
+    if (!itemId) return { canBuild: false, reason: 'Invalid shard type.' };
+
+    const item = getItemById(itemId);
+    if (!item) return { canBuild: false, reason: 'Target item definition not found.' };
+
+    const cost = SHARD_REQUIREMENTS[item.tier];
+    const owned = inventory[shardId] || 0;
+
+    if (owned < cost) {
+        return { canBuild: false, item, cost, reason: `Need ${cost} shards (Have ${owned}).` };
+    }
+
+    return { canBuild: true, item, cost };
 }
 
 /**

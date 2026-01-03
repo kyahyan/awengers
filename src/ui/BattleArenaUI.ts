@@ -2,7 +2,7 @@ import { HERO_ASSETS, HeroSpriteConfig } from '../data/HeroAssetsMap';
 import { EnemyDefinition, getEnemyById, getEnemyStatsForLevel } from '../data/EnemyDefinitions';
 import { calculateLoot, LootReward } from '../data/LootSystem';
 
-const FPS = 30;
+const FPS = 24; // Balanced for smooth animations without lag
 const MAX_AP = 10000;
 
 const ANIM_FRAMES: Record<string, number> = {
@@ -158,8 +158,11 @@ export class BattleArenaUI {
     private autoBtn!: HTMLElement;
     private startBtn!: HTMLElement; // New button
     private activeTooltip: HTMLElement | null = null;
-    private dataModal: HTMLElement | null = null;
-    private dataModalActiveTab: 'damage' | 'treatment' | 'damageTaken' = 'damage';
+
+    // Repeat Logic
+    private isRepeat: boolean = false;
+    private repeatBtn!: HTMLElement;
+    private resultOverlay: HTMLElement | null = null;
 
     private static NAME_ALIASES: Record<string, string> = {
         'Oryx': 'Antelope Mage',
@@ -219,9 +222,16 @@ export class BattleArenaUI {
     private async preloadAssets() {
         try {
             const assetsToLoad: string[] = [];
-            const addAnimPaths = (basePath: string) => { if (basePath) Object.keys(ANIM_FRAMES).forEach(anim => assetsToLoad.push(basePath.replace('idle', anim))); };
+            const addAnimPaths = (basePath: string) => {
+                if (basePath) {
+                    Object.keys(ANIM_FRAMES).forEach(anim => {
+                        // OPTIMIZATION: Skip heavy unused assets for battle
+                        if (anim === 'showidle' || anim === 'dizzy' || anim === 'win') return;
+                        assetsToLoad.push(basePath.replace('idle', anim));
+                    });
+                }
+            };
 
-            // Preload all heroes
             // Preload all heroes
             this.teamInfo.forEach(heroInfo => {
                 const name = heroInfo.name;
@@ -233,27 +243,71 @@ export class BattleArenaUI {
                     const heroData = HERO_DATA[heroId];
                     if (heroData && heroData.skillIcons) {
                         heroData.skillIcons.forEach((icon: string) => {
+                            // Correct path logic: Extract hero folder from spritePath
+                            // Structure: .../heroes/HERO_FOLDER/VIEW/file.png
+                            // Skills:    .../heroes/HERO_FOLDER/skills/icon.png
                             const parts = spritePath.split('/');
-                            if (parts.length > 4) assetsToLoad.push(`${parts.slice(0, 4).join('/')}/skills/${icon}`);
+                            const viewIndex = parts.findIndex(p => p === 'side-left' || p === 'side-right' || p === 'iso-right');
+                            if (viewIndex > 0) {
+                                const heroRoot = parts.slice(0, viewIndex).join('/');
+                                assetsToLoad.push(`${heroRoot}/skills/${icon}`);
+                            } else {
+                                // Fallback if view folder logic fails (unlikely given current structure)
+                                if (parts.length > 4) assetsToLoad.push(`${parts.slice(0, 4).join('/')}/skills/${icon}`);
+                            }
                         });
                     }
                 }
             });
 
-            // Preload Enemy (heuristic as before)
-            // Just load standard enemy if possible or fallback
-            // For now, simpler enemy preloading logic from original code or just skip explicitly for "enemyName"
+            // Preload Enemy Assets
+            const enemyDef = getEnemyById(this.enemyId);
+            if (enemyDef) {
+                if (enemyDef.icon) assetsToLoad.push(enemyDef.icon);
+                if (enemyDef.sprite && enemyDef.sprite.animations) {
+                    Object.entries(enemyDef.sprite.animations).forEach(([key, anim]) => {
+                        if (key === 'showidle' || key === 'dizzy' || key === 'win') return;
+                        if (anim.file) assetsToLoad.push(`${enemyDef.sprite.basePath}${anim.file}`);
+                    });
+                }
+            }
 
+            // Preload Mock Enemies (Heroes used as enemies)
+            const MOCK_ENEMIES = ['Antelope Mage', 'Antelope Ranger', 'Razor'];
+            MOCK_ENEMIES.forEach(name => {
+                const config = HERO_ASSETS.find(h => h.name === `${name} Left`);
+                if (config?.sprite2D) addAnimPaths(config.sprite2D.spritesheetPath);
+            });
 
             if (assetsToLoad.length === 0) return;
-            const loadPromises = assetsToLoad.map(src => new Promise<void>((resolve) => {
-                const img = new Image();
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-                img.src = src;
-            }));
-            await Promise.race([Promise.all(loadPromises), new Promise(r => setTimeout(r, 2000))]);
-        } catch (e) { }
+            const uniqueAssets = [...new Set(assetsToLoad)];
+
+            const loadAll = async () => {
+                const BATCH_SIZE = 5;
+                for (let i = 0; i < uniqueAssets.length; i += BATCH_SIZE) {
+                    const batch = uniqueAssets.slice(i, i + BATCH_SIZE);
+                    await Promise.all(batch.map(async (rawSrc) => {
+                        const src = encodeURI(rawSrc);
+                        const img = new Image();
+                        img.src = src;
+                        try {
+                            await img.decode();
+                        } catch (e) {
+                            // Fallback to standard load if decode fails
+                            await new Promise<void>((resolve) => {
+                                if (img.complete) resolve();
+                                else {
+                                    img.onload = () => resolve();
+                                    img.onerror = () => resolve();
+                                }
+                            });
+                        }
+                    }));
+                }
+            };
+
+            await Promise.race([loadAll(), new Promise(r => setTimeout(r, 10000))]);
+        } catch (e) { console.error('Asset preload failed', e); }
     }
 
     private showArena() {
@@ -335,7 +389,6 @@ export class BattleArenaUI {
 
         if (this.heroes.length > 0) {
             this.createHUD(battleContainer);
-            this.createDataButton(battleContainer);
 
             this.lastTick = performance.now();
             this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
@@ -346,7 +399,7 @@ export class BattleArenaUI {
         const exitBtn = document.createElement('button');
         exitBtn.innerText = '✕';
         exitBtn.style.cssText = `position: absolute; top: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: #fff; font-size: 1.5rem; cursor: pointer; z-index: 100; transition: all 0.2s;`;
-        exitBtn.onclick = () => this.close();
+        exitBtn.onclick = () => this.showAbandonConfirmation();
         this.arenaScreen.appendChild(exitBtn);
 
         this.arenaScreen.appendChild(document.createElement('style')).textContent = `
@@ -389,11 +442,6 @@ export class BattleArenaUI {
         this.lastTick = timestamp;
 
         this.frameCount++;
-        // Update Data Modal if open every 30 frames (approx 1 sec at 30fps) to keep stats fresh
-        if (this.dataModal && this.frameCount % 30 === 0) {
-            const content = this.dataModal.querySelector('#data-modal-content') as HTMLElement;
-            if (content) this.renderDataModalContent(content);
-        }
 
         const livingHeroes = this.heroes.filter(h => !h.isDead);
         const livingEnemies = this.enemies.filter(e => !e.isDead);
@@ -434,8 +482,6 @@ export class BattleArenaUI {
         const isStunned = entity.effects.some(e => e.type === 'stun');
         if (isStunned) return;
 
-        // Razor Bleed Processing (DoT)
-        // We'll process DoT once per second approx
         // Razor Bleed Processing (DoT)
         // We'll process DoT once per second approx
         // Check if 1 second has passed since last DoT tick?
@@ -803,11 +849,7 @@ export class BattleArenaUI {
         if (entity.isDead && type !== 'dead') return;
 
         // Check if this is an enemy entity with enemyDef
-        const enemyDef = (entity.element as any).enemyDef;
-        if (enemyDef) {
-            this.playEnemyAnim(entity, type, loop, onComplete);
-            return;
-        }
+
 
         if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
         entity.currentAnim = type;
@@ -816,23 +858,79 @@ export class BattleArenaUI {
         entity.currentAnimTotalFrames = ANIM_FRAMES[type] || 24;
         entity.loopAnim = loop;
         entity.onAnimComplete = onComplete;
-        entity.animFrame = 0; entity.animTimestamp = 0;
-        const loopFn = (timestamp: number) => {
-            if (!entity.animTimestamp) entity.animTimestamp = timestamp;
-            if (timestamp - entity.animTimestamp > 1000 / (FPS * this.battleSpeed)) {
-                entity.animFrame++; entity.animTimestamp = timestamp;
-                if (entity.animFrame >= entity.currentAnimTotalFrames) {
-                    if (entity.loopAnim) entity.animFrame = 0;
-                    else { entity.animFrame = entity.currentAnimTotalFrames - 1; if (entity.onAnimComplete) entity.onAnimComplete(); return; }
+        entity.animFrame = 0;
+
+        const spriteSize = 400;
+        const isIdle = type === 'idle';
+
+        // For idle: Use sine-wave breathing loop (smooth 0→1→0)
+        // For other animations: Use linear frame stepping
+        if (isIdle && loop) {
+            // Sine-Wave Breathing Loop - throttled to only update on frame change
+            const totalFrames = entity.currentAnimTotalFrames;
+            const cycleDuration = 2000; // 2 seconds for a complete in+out breath
+            const startTime = performance.now();
+            let lastFrameIndex = -1;
+
+            const breathingLoop = () => {
+                if (entity.currentAnim !== 'idle') return; // Animation changed
+
+                const elapsed = performance.now() - startTime;
+                const progress = (elapsed % cycleDuration) / cycleDuration; // 0 -> 1 normalized
+
+                // Linear Ping-Pong (Triangle Wave) for constant speed
+                let easedProgress = 0;
+                if (progress <= 0.5) {
+                    easedProgress = progress * 2; // 0 -> 1
+                } else {
+                    easedProgress = 2 - (progress * 2); // 1 -> 0
                 }
-                const spriteSize = 400;
-                const col = entity.animFrame % entity.baseConfig.framesPerRow;
-                const row = Math.floor(entity.animFrame / entity.baseConfig.framesPerRow);
-                entity.spriteEl.style.backgroundPosition = `-${col * spriteSize}px -${row * spriteSize}px`;
-            }
+
+                // Map to frame index
+                const frameIndex = Math.floor(easedProgress * (totalFrames - 1));
+
+                // Only update DOM if frame changed
+                if (frameIndex !== lastFrameIndex) {
+                    lastFrameIndex = frameIndex;
+                    const col = frameIndex % entity.baseConfig.framesPerRow;
+                    const row = Math.floor(frameIndex / entity.baseConfig.framesPerRow);
+                    entity.spriteEl.style.backgroundPosition = `-${col * spriteSize}px -${row * spriteSize}px`;
+                }
+
+                entity.animReqId = requestAnimationFrame(breathingLoop);
+            };
+            entity.animReqId = requestAnimationFrame(breathingLoop);
+        } else {
+            // Standard linear animation
+            entity.animTimestamp = 0;
+            const frameInterval = 1000 / (FPS * this.battleSpeed);
+
+            const loopFn = (timestamp: number) => {
+                if (!entity.animTimestamp) entity.animTimestamp = timestamp;
+
+                if (timestamp - entity.animTimestamp >= frameInterval) {
+                    entity.animTimestamp = timestamp;
+                    entity.animFrame++;
+
+                    if (entity.animFrame >= entity.currentAnimTotalFrames) {
+                        if (entity.loopAnim) {
+                            entity.animFrame = 0;
+                        } else {
+                            entity.animFrame = entity.currentAnimTotalFrames - 1;
+                            if (entity.onAnimComplete) entity.onAnimComplete();
+                            return;
+                        }
+                    }
+
+                    const col = entity.animFrame % entity.baseConfig.framesPerRow;
+                    const row = Math.floor(entity.animFrame / entity.baseConfig.framesPerRow);
+                    entity.spriteEl.style.backgroundPosition = `-${col * spriteSize}px -${row * spriteSize}px`;
+                }
+
+                entity.animReqId = requestAnimationFrame(loopFn);
+            };
             entity.animReqId = requestAnimationFrame(loopFn);
-        };
-        entity.animReqId = requestAnimationFrame(loopFn);
+        }
     }
     private showFloatingText(targetEl: HTMLElement, text: string, isCrit: boolean) {
         const el = document.createElement('div'); el.className = 'floating-damage'; el.innerText = text;
@@ -840,118 +938,7 @@ export class BattleArenaUI {
         const randomX = (Math.random() - 0.5) * 50; el.style.left = `calc(50% + ${randomX}px)`; el.style.top = '0px';
         targetEl.appendChild(el); setTimeout(() => el.remove(), 1000 / this.battleSpeed);
     }
-    // ... [Rest of Helpers] ...
-    private createDataButton(c: HTMLElement) {
-        const btn = document.createElement('button');
-        btn.className = 'data-btn';
-        btn.innerHTML = '📊';
-        btn.title = 'Battle Data';
-        btn.onclick = () => this.showDataModal();
-        c.appendChild(btn);
-    }
 
-    private showDataModal() {
-        // Remove existing modal if any
-        if (this.dataModal) {
-            this.dataModal.remove();
-            this.dataModal = null;
-            return;
-        }
-
-        this.dataModal = document.createElement('div');
-        this.dataModal.className = 'data-modal';
-
-        const header = document.createElement('div');
-        header.className = 'data-modal-header';
-        header.innerHTML = `<h2>Data</h2>`;
-
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'data-modal-close';
-        closeBtn.innerHTML = '✕';
-        closeBtn.onclick = () => { this.dataModal?.remove(); this.dataModal = null; };
-        header.appendChild(closeBtn);
-
-        const content = document.createElement('div');
-        content.className = 'data-modal-content';
-        content.id = 'data-modal-content';
-
-        const tabs = document.createElement('div');
-        tabs.className = 'data-modal-tabs';
-
-        const tabNames: Array<{ key: 'damage' | 'treatment' | 'damageTaken', label: string }> = [
-            { key: 'damage', label: 'Damage' },
-            { key: 'treatment', label: 'Treatment' },
-            { key: 'damageTaken', label: 'Damage Taken' }
-        ];
-
-        tabNames.forEach(tab => {
-            const tabBtn = document.createElement('button');
-            tabBtn.className = `data-modal-tab ${tab.key === this.dataModalActiveTab ? 'active' : ''}`;
-            tabBtn.innerText = tab.label;
-            tabBtn.onclick = () => {
-                this.dataModalActiveTab = tab.key;
-                tabs.querySelectorAll('.data-modal-tab').forEach(t => t.classList.remove('active'));
-                tabBtn.classList.add('active');
-                this.renderDataModalContent(content);
-            };
-            tabs.appendChild(tabBtn);
-        });
-
-        this.dataModal.appendChild(header);
-        this.dataModal.appendChild(content);
-        this.dataModal.appendChild(tabs);
-
-        this.renderDataModalContent(content);
-        this.container.appendChild(this.dataModal);
-    }
-
-    private renderDataModalContent(contentEl: HTMLElement) {
-        contentEl.innerHTML = '';
-
-        // Combine heroes and enemies for display
-        const allUnits = [...this.heroes, ...this.enemies];
-
-        // Sort by the active tab's stat
-        const sortedUnits = allUnits.sort((a, b) => {
-            switch (this.dataModalActiveTab) {
-                case 'damage': return b.battleStats.damageDealt - a.battleStats.damageDealt;
-                case 'treatment': return b.battleStats.healing - a.battleStats.healing;
-                case 'damageTaken': return b.battleStats.damageTaken - a.battleStats.damageTaken;
-            }
-        });
-
-        sortedUnits.forEach(unit => {
-            const isHero = this.heroes.includes(unit);
-            const row = document.createElement('div');
-            row.className = 'data-row';
-
-            let value = 0;
-            let valueClass = '';
-            switch (this.dataModalActiveTab) {
-                case 'damage': value = unit.battleStats.damageDealt; valueClass = 'damage'; break;
-                case 'treatment': value = unit.battleStats.healing; valueClass = 'healing'; break;
-                case 'damageTaken': value = unit.battleStats.damageTaken; valueClass = 'damage'; break;
-            }
-
-            const status = unit.isDead ? 'Out of the fight' : `${unit.hp}/${unit.maxHp}`;
-            const borderColor = isHero ? '#4ade80' : '#f87171';
-
-            row.innerHTML = `
-                <div class="data-row-avatar" style="border-color: ${borderColor};">
-                    <div style="width:100%;height:100%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">
-                        ${isHero ? '⚔️' : '👹'}
-                    </div>
-                </div>
-                <div class="data-row-info">
-                    <div class="data-row-name">${unit.name}</div>
-                    <div class="data-row-status">${status}</div>
-                </div>
-                <div class="data-row-value ${valueClass}">${value.toLocaleString()}</div>
-            `;
-
-            contentEl.appendChild(row);
-        });
-    }
 
     private createHUD(c: HTMLElement) {
         if (this.heroes.length === 0) return;
@@ -975,8 +962,50 @@ export class BattleArenaUI {
         // Speed Button
         this.createSpeedButton(h);
 
+        // Repeat Button
+        this.createRepeatButton(h);
+
         c.appendChild(h);
         this.updateHUD();
+    }
+
+    private createRepeatButton(c: HTMLElement) {
+        this.repeatBtn = document.createElement('div');
+        this.repeatBtn.className = 'hud-btn';
+        this.repeatBtn.style.cssText = `
+            width: 60px; height: 60px; border-radius: 50%; 
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
+            cursor: pointer; transition: all 0.2s;
+        `;
+
+        const icon = document.createElement('div');
+        icon.innerText = '🔁';
+        icon.style.fontSize = '1.2rem';
+        this.repeatBtn.appendChild(icon);
+
+        const text = document.createElement('div');
+        text.innerText = 'REPEAT';
+        this.repeatBtn.appendChild(text);
+
+        this.repeatBtn.onclick = () => this.toggleRepeat();
+        c.appendChild(this.repeatBtn);
+    }
+
+    private toggleRepeat() {
+        this.isRepeat = !this.isRepeat;
+        if (this.repeatBtn) {
+            if (this.isRepeat) {
+                this.repeatBtn.style.background = 'rgba(255, 215, 0, 0.8)';
+                this.repeatBtn.style.color = '#000';
+                this.repeatBtn.style.borderColor = '#ffd700';
+            } else {
+                this.repeatBtn.style.background = 'rgba(0,0,0,0.6)';
+                this.repeatBtn.style.color = '#fff';
+                this.repeatBtn.style.borderColor = '#fff';
+            }
+        }
     }
 
     private createStartButton(c: HTMLElement) {
@@ -1089,12 +1118,11 @@ export class BattleArenaUI {
         c.appendChild(this.speedBtn);
     }
 
-    private createSkillIcon(src: string, isUlt: boolean): HTMLElement { const s = isUlt ? 85 : 70; const b = isUlt ? '#fbbf24' : '#fff'; const w = document.createElement('div'); w.className = 'hud-btn'; w.style.cssText = `width:${s}px;height:${s}px;position:relative;border-radius:12px;border:2px solid ${b};background:#000;overflow:hidden;flex-shrink:0;`; const i = document.createElement('img'); i.src = src; i.style.cssText = `width:100%;height:100%;object-fit:cover;`; i.onerror = () => { i.style.display = 'none'; }; w.appendChild(i); const o = document.createElement('div'); o.className = 'cd-overlay'; o.style.cssText = `position:absolute;inset:0;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;color:#fff;font-size:1.8rem;font-weight:bold;opacity:0;pointer-events:none;transition:opacity 0.2s;`; w.appendChild(o); return w; }
-    private showTooltip(i: number, b: HTMLElement) { if (this.activeTooltip) this.activeTooltip.remove(); const hId = this.heroes[0]?.heroId; const d = HERO_DATA[hId!]?.skills[i]; if (!d) return; const t = document.createElement('div'); t.className = 'skill-tooltip'; t.innerHTML = `<h3>${d.name}</h3><div class="type">${d.type}</div><p>${d.desc}</p>`; b.parentElement?.appendChild(t); this.activeTooltip = t; }
+
     private toggleSpeed() { this.battleSpeed = this.battleSpeed === 2 ? 3 : 2; if (this.speedBtn) this.speedBtn.innerText = `${this.battleSpeed}x`; }
     private updateHUD() { if (this.heroes.length === 0) return; const hero = this.heroes[0]; const u = (i: number, v: number) => { if (this.skillBtns[i]) { const o = this.skillBtns[i].querySelector('.cd-overlay') as HTMLElement; const w = this.skillBtns[i]; if (v > 0) { o.style.opacity = '1'; o.innerText = v.toString(); w.style.filter = 'grayscale(1)'; } else { o.style.opacity = '0'; w.style.filter = 'none'; } } }; u(0, hero.cooldowns.skill1); u(1, hero.cooldowns.skill2); u(2, hero.cooldowns.skill3); u(3, hero.cooldowns.ult); }
 
-    private createBattleEntity(id: string, assetName: string, level: string, color: string, spriteConfig: HeroSpriteConfig): BattleEntity {
+    private createBattleEntity(id: string, assetName: string, level: string, _color: string, spriteConfig: HeroSpriteConfig): BattleEntity {
         const heroId = ASSET_TO_HERO_ID[assetName] || 'oryx_mage';
         const data = HERO_DATA[heroId];
         const name = data.name;
@@ -1127,9 +1155,9 @@ export class BattleArenaUI {
         overheadUI.appendChild(barsContainer); container.appendChild(overheadUI);
 
         const spriteSize = 400;
-        const sprite = document.createElement('div'); sprite.style.cssText = `width: ${spriteSize}px; height: ${spriteSize}px; background-size: ${spriteConfig.framesPerRow * spriteSize}px auto; background-repeat: no-repeat; background-position: 0 0; image-rendering: pixelated; filter: drop-shadow(0 0 30px ${color}40);`;
+        const sprite = document.createElement('div'); sprite.style.cssText = `width: ${spriteSize}px; height: ${spriteSize}px; background-size: ${spriteConfig.framesPerRow * spriteSize}px auto; background-repeat: no-repeat; background-position: 0 0; will-change: background-position;`;
         container.appendChild(sprite);
-        const shadow = document.createElement('div'); shadow.style.cssText = `width: 200px; height: 20px; background: rgba(0,0,0,0.4); border-radius: 50%; margin-top: -40px; z-index: -1; filter: blur(5px);`;
+        const shadow = document.createElement('div'); shadow.style.cssText = `width: 200px; height: 20px; background: rgba(0,0,0,0.4); border-radius: 50%; margin-top: -120px; z-index: -1;`;
         container.appendChild(shadow);
 
         const stats = getStatsForLevel(heroId, parseInt(level));
@@ -1145,177 +1173,8 @@ export class BattleArenaUI {
         };
     }
 
-    private createEnemyEntity(enemyDef: EnemyDefinition, level: number): BattleEntity {
-        const stats = getEnemyStatsForLevel(enemyDef, level);
-        const name = enemyDef.displayName;
-        const color = enemyDef.type === 'boss' ? '#ff0000' : enemyDef.type === 'elite' ? '#fbbf24' : '#ef4444';
-        const isMelee = true; // Treant is melee
 
-        const container = document.createElement('div');
-        container.style.cssText = `display: flex; flex-direction: column; align-items: center; position: relative; z-index: 10;`;
 
-        const overheadUI = document.createElement('div');
-        overheadUI.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: -110px; z-index: 20; pointer-events: none; padding-bottom: 20px;`;
-
-        const levelText = document.createElement('div');
-        levelText.innerText = String(level);
-        levelText.style.cssText = `color: #fff; font-size: 1.2rem; font-weight: 900; line-height: 1; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; font-family: 'SF Pro Display';`;
-        overheadUI.appendChild(levelText);
-
-        // Enemy type badge
-        if (enemyDef.type !== 'normal') {
-            const badge = document.createElement('div');
-            badge.innerText = enemyDef.type === 'boss' ? '💀' : '⚔️';
-            badge.style.cssText = `font-size: 1.5rem;`;
-            overheadUI.appendChild(badge);
-        }
-
-        const barsContainer = document.createElement('div');
-        barsContainer.style.cssText = `display: flex; flex-direction: column; gap: 2px; position:relative;`;
-
-        const statusContainer = document.createElement('div');
-        statusContainer.style.cssText = `position: absolute; bottom: 100%; left: 0; width: 100%; display: flex; gap: 2px; margin-bottom: 2px;`;
-        barsContainer.appendChild(statusContainer);
-
-        const hpBarTrack = document.createElement('div');
-        hpBarTrack.style.cssText = `width: 120px; height: 12px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
-        const hpBarFill = document.createElement('div');
-        hpBarFill.style.cssText = `width: 100%; height: 100%; background: ${color}; transition: width 0.2s ease-out;`;
-        hpBarTrack.appendChild(hpBarFill);
-        barsContainer.appendChild(hpBarTrack);
-
-        const apBarTrack = document.createElement('div');
-        apBarTrack.style.cssText = `width: 120px; height: 6px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
-        const apBarFill = document.createElement('div');
-        apBarFill.style.cssText = `width: 0%; height: 100%; background: #fbbf24; transition: width 0.1s linear;`;
-        apBarTrack.appendChild(apBarFill);
-        barsContainer.appendChild(apBarTrack);
-
-        overheadUI.appendChild(barsContainer);
-        container.appendChild(overheadUI);
-
-        // Create enemy sprite
-        const spriteSize = enemyDef.sprite.frameSize || 512;
-        const framesPerRow = enemyDef.sprite.animations.idle.framesPerRow || 8;
-        const idleAnim = enemyDef.sprite.animations.idle;
-        const spritePath = `${enemyDef.sprite.basePath}${idleAnim.file}`;
-
-        const sprite = document.createElement('div');
-        sprite.style.cssText = `
-            width: ${spriteSize}px; 
-            height: ${spriteSize}px; 
-            background-image: url('${spritePath}');
-            background-size: ${framesPerRow * spriteSize}px auto; 
-            background-repeat: no-repeat; 
-            background-position: 0 0; 
-            image-rendering: auto; 
-            filter: drop-shadow(0 0 30px ${color}40);
-            transform: scaleX(-1);
-        `;
-        container.appendChild(sprite);
-
-        const shadow = document.createElement('div');
-        shadow.style.cssText = `width: 200px; height: 20px; background: rgba(0,0,0,0.4); border-radius: 50%; margin-top: -40px; z-index: -1; filter: blur(5px);`;
-        container.appendChild(shadow);
-
-        // Create a fake HeroSpriteConfig for compatibility
-        const baseConfig: HeroSpriteConfig = {
-            spritesheetPath: spritePath,
-            frameWidth: spriteSize,
-            frameHeight: spriteSize,
-            framesPerRow: framesPerRow,
-            totalFrames: idleAnim.frames
-        };
-
-        // Store enemy definition for animation lookups
-        (container as any).enemyDef = enemyDef;
-
-        return {
-            id: 'enemy',
-            name,
-            maxHp: stats.hp,
-            hp: stats.hp,
-            level,
-            element: container,
-            spriteEl: sprite,
-            hpBarFill,
-            apBarFill,
-            statusContainer,
-            baseConfig,
-            isDead: false,
-            cooldowns: { skill1: 0, skill2: 0, skill3: 0, ult: 0 },
-            currentAnim: 'idle',
-            animFrame: 0,
-            animTimestamp: 0,
-            animReqId: null,
-            currentAnimTotalFrames: idleAnim.frames,
-            loopAnim: true,
-            skillIcons: [],
-            stats,
-            ap: 0,
-            effects: [],
-            passiveCharges: 0,
-            heroId: enemyDef.id,
-            isMelee,
-            battleStats: { damageDealt: 0, healing: 0, damageTaken: 0 }
-        };
-    }
-
-    private playEnemyAnim(entity: BattleEntity, type: string, loop: boolean = true, onComplete?: () => void) {
-        if (entity.isDead && type !== 'dead') return;
-        if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
-
-        // Get enemy definition from stored data
-        const enemyDef = (entity.element as any).enemyDef as EnemyDefinition | undefined;
-        if (!enemyDef) {
-            // Fallback to regular playAnim for hero entities
-            this.playAnim(entity, type, loop, onComplete);
-            return;
-        }
-
-        // Map hero animation types to enemy animation types
-        const enemyAnimType = ENEMY_ANIM_MAP[type] || 'idle';
-        const animConfig = enemyDef.sprite.animations[enemyAnimType as keyof typeof enemyDef.sprite.animations];
-
-        if (!animConfig) {
-            console.warn(`[Battle] No animation found for ${enemyAnimType}, falling back to idle`);
-            return;
-        }
-
-        entity.currentAnim = type;
-        const newPath = `${enemyDef.sprite.basePath}${animConfig.file}`;
-        entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
-        entity.currentAnimTotalFrames = animConfig.frames;
-        entity.loopAnim = loop;
-        entity.onAnimComplete = onComplete;
-        entity.animFrame = 0;
-        entity.animTimestamp = 0;
-
-        const spriteSize = enemyDef.sprite.frameSize || 512;
-        const framesPerRow = animConfig.framesPerRow;
-        entity.spriteEl.style.backgroundSize = `${framesPerRow * spriteSize}px auto`;
-
-        const loopFn = (timestamp: number) => {
-            if (!entity.animTimestamp) entity.animTimestamp = timestamp;
-            if (timestamp - entity.animTimestamp > 1000 / (FPS * this.battleSpeed)) {
-                entity.animFrame++;
-                entity.animTimestamp = timestamp;
-                if (entity.animFrame >= entity.currentAnimTotalFrames) {
-                    if (entity.loopAnim) entity.animFrame = 0;
-                    else {
-                        entity.animFrame = entity.currentAnimTotalFrames - 1;
-                        if (entity.onAnimComplete) entity.onAnimComplete();
-                        return;
-                    }
-                }
-                const col = entity.animFrame % framesPerRow;
-                const row = Math.floor(entity.animFrame / framesPerRow);
-                entity.spriteEl.style.backgroundPosition = `-${col * spriteSize}px -${row * spriteSize}px`;
-            }
-            entity.animReqId = requestAnimationFrame(loopFn);
-        };
-        entity.animReqId = requestAnimationFrame(loopFn);
-    }
 
 
     private setIsometricPosition(el: HTMLElement, index: number, isPlayer: boolean) {
@@ -1374,12 +1233,86 @@ export class BattleArenaUI {
         });
     }
 
-    public close() {
-        if (this.battleLoopId) cancelAnimationFrame(this.battleLoopId);
+    private stopBattleLoop() {
+        if (this.battleLoopId) {
+            cancelAnimationFrame(this.battleLoopId);
+            this.battleLoopId = null;
+        }
         this.heroes.forEach(h => { if (h.animReqId) cancelAnimationFrame(h.animReqId); });
         this.enemies.forEach(e => { if (e.animReqId) cancelAnimationFrame(e.animReqId); });
+    }
+
+    public close() {
+        this.stopBattleLoop();
         this.container.style.transition = 'opacity 0.3s ease'; this.container.style.opacity = '0';
         setTimeout(() => { this.container.remove(); this.onClose(); }, 300);
+    }
+
+    private showAbandonConfirmation() {
+        // Pause battle
+        const wasPaused = this.isPaused;
+        this.isPaused = true;
+
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 20000;
+            display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.2s;
+        `;
+
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: linear-gradient(180deg, #2b1d0e 0%, #1a1005 100%);
+            border: 2px solid #8b6542; border-radius: 12px; padding: 30px;
+            width: 400px; text-align: center; color: #fff;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            font-family: 'SF Pro Display';
+            transform: scale(0.9); animation: popIn 0.2s forwards;
+        `;
+
+        content.innerHTML = `
+            <div style="font-size: 1.5rem; font-weight: bold; margin-bottom: 15px; color: #fbbf24;">Abandon Battle?</div>
+            <div style="font-size: 1rem; color: #ccc; margin-bottom: 30px;">You will lose any progress and rewards for this attempt.</div>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="cancel-abandon" style="padding: 10px 20px; background: transparent; border: 1px solid #888; color: #ccc; border-radius: 20px; cursor: pointer;">Cancel</button>
+                <button id="confirm-abandon" style="padding: 10px 20px; background: #ef4444; border: none; color: white; border-radius: 20px; cursor: pointer; font-weight: bold;">Abandon</button>
+            </div>
+        `;
+
+        modal.appendChild(content);
+        this.container.appendChild(modal);
+
+        modal.querySelector('#cancel-abandon')?.addEventListener('click', () => {
+            modal.remove();
+            this.isPaused = wasPaused; // Restore state
+        });
+
+        modal.querySelector('#confirm-abandon')?.addEventListener('click', () => {
+            modal.remove();
+            this.close();
+        });
+    }
+
+    private restart() {
+        this.stopBattleLoop();
+        this.activeTooltip?.remove();
+        this.activeTooltip = null;
+        if (this.resultOverlay) { this.resultOverlay.remove(); this.resultOverlay = null; }
+        if (this.arenaScreen) { this.arenaScreen.remove(); this.arenaScreen = null; }
+
+        this.isBattleStarted = false;
+        this.isPaused = false;
+        this.isAnimatingAction = false;
+        this.heroes = [];
+        this.enemies = [];
+        this.frameCount = 0;
+
+        // Reset HUD elements references so they get recreated
+        this.skillBtns = [];
+
+        this.showLoadingScreen();
     }
     public getElement(): HTMLElement { return this.container; }
 
@@ -1488,11 +1421,14 @@ export class BattleArenaUI {
         btn.onclick = () => handleComplete();
 
         // Auto Continue Logic
-        if (win && this.isAuto) {
+        if (win && (this.isAuto || this.isRepeat)) {
             let countdown = 3;
+            const isRepeatMode = this.isRepeat;
+            const actionText = isRepeatMode ? "Repeating" : "Continuing";
+
             // Create Cancel Button (Red X or "Stop")
             const stopBtn = document.createElement('button');
-            stopBtn.innerText = "Stop Auto";
+            stopBtn.innerText = `Stop ${isRepeatMode ? 'Repeat' : 'Auto'}`;
             stopBtn.style.cssText = `
                 padding: 15px 30px; font-size: 1.2rem; font-weight: bold;
                 background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
@@ -1504,29 +1440,51 @@ export class BattleArenaUI {
             // Insert Stop button before Continue button
             btnContainer.insertBefore(stopBtn, btn);
 
-            btn.innerText = `Continue (${countdown})`;
+            btn.innerText = `${isRepeatMode ? 'Repeat' : 'Continue'} (${countdown})`;
 
             const interval = setInterval(() => {
                 countdown--;
-                btn.innerText = `Continue (${countdown})`;
+                btn.innerText = `${isRepeatMode ? 'Repeat' : 'Continue'} (${countdown})`;
                 if (countdown <= 0) {
                     clearInterval(interval);
-                    handleComplete();
+                    if (isRepeatMode) {
+                        this.restart();
+                    } else {
+                        handleComplete();
+                    }
                 }
             }, 1000);
 
             stopBtn.onclick = () => {
                 clearInterval(interval);
-                this.isAuto = false; // Turn off auto
-                this.toggleAuto(); // Update UI button state if needed (though visual is behind overlay)
+                if (isRepeatMode) this.isRepeat = false;
+                else this.isAuto = false;
+
+                // Update UI toggles if they still exist (likely not visible but state matters)
+                if (this.repeatBtn) { // Update visual just in case
+                    this.toggleRepeat(); // Toggles off since we set false above? No, toggle inverts.
+                    // Force update logic:
+                    this.isRepeat = false;
+                    this.repeatBtn.style.background = 'rgba(0,0,0,0.6)';
+                    this.repeatBtn.style.color = '#fff';
+                    this.repeatBtn.style.borderColor = '#fff';
+                }
+
                 stopBtn.remove(); // Remove stop button
                 btn.innerText = "Continue"; // Reset main button
+
+                // Re-bind handler to normal complete (since repeat is cancelled)
+                btn.onclick = () => handleComplete();
             };
 
             // Allow manual continue to override
             btn.onclick = () => {
                 clearInterval(interval);
-                handleComplete();
+                if (isRepeatMode) {
+                    this.restart();
+                } else {
+                    handleComplete();
+                }
             };
         }
 
@@ -1543,6 +1501,7 @@ export class BattleArenaUI {
         `;
         overlay.appendChild(style);
 
+        this.resultOverlay = overlay;
         this.container.appendChild(overlay);
     }
 }

@@ -15,7 +15,7 @@ import { HERO_ASSETS } from '../data/HeroAssetsMap';
 import { AdventureModal } from './AdventureModal';
 import { BattleArenaUI } from './BattleArenaUI';
 import { JADE_LOTUS_SHRINE_STAGES } from '../data/AdventureData';
-import { LootReward, MAP_SHARD_DROPS, ShardDefinition } from '../data/LootSystem';
+import { LootReward } from '../data/LootSystem';
 
 export class UIManager {
     private debugEl!: HTMLElement;
@@ -29,6 +29,7 @@ export class UIManager {
     private summonUI: SummonUI | null = null;
     private backpackUI: BackpackUI | null = null;
     private forgeUI: ForgeUI | null = null;
+    private shardsUI: any | null = null; // Type as any or import ShardsUI. Using lazy import in switchScreen to avoid circular dep issues if any
     private currentScreenEl: HTMLElement | null = null;
     public loadingUI: LoadingUI | null = null;
     public onStartLoading: (() => void) | null = null;
@@ -774,6 +775,36 @@ export class UIManager {
             this.closePreview();
         }
 
+        // SPECIAL CASE: SHARDS as overlay
+        if (screen === 'SHARDS') {
+            const wasOnHeroes = this.currentScreenEl !== null;
+            import('./ShardsUI').then(({ ShardsUI }) => {
+                this.shardsUI = new ShardsUI(this.currentUser!, () => {
+                    if (this.shardsUI) {
+                        this.shardsUI.getElement().remove();
+                        this.shardsUI = null;
+                    }
+                    if (!wasOnHeroes) {
+                        this.toggleHomeElements(true);
+                    }
+                }, (shardId) => {
+                    // Handle Build Action
+                    import('../data/ItemSystem').then(({ getItemById }) => {
+                        // We need to implement buildFromShards or do logic here.
+                        // Plan said "Add canBuildFromShards and buildFromShards functions."
+                        // I added canBuildFromShards but maybe forgot buildFromShards in ItemSystem?
+                        // I will check ItemSystem again or implement logic here.
+                        // Let's implement logic here for now or add function if missing.
+                        // Actually, I should probably add buildFromShards to ItemSystem if I haven't.
+                        // But for now, let's just do it inline or call a method I'll add.
+                        this.handleShardBuild(shardId);
+                    });
+                });
+                this.uiContainer?.appendChild(this.shardsUI.getElement());
+            });
+            return;
+        }
+
         // SPECIAL CASE: SUMMON as overlay (don't clear current screen)
         if (screen === 'SUMMON') {
             // Track if we were on Heroes screen (capture before async)
@@ -1062,218 +1093,6 @@ export class UIManager {
                         contentArea.appendChild(heroListEl);
                     }
 
-                } else if (tabName === 'Shards') {
-                    // Shards Tab: Dynamic Display with Sub-Tabs
-                    const shardsContent = document.createElement('div');
-                    shardsContent.style.cssText = `
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        height: 100%;
-                        padding-top: 120px;
-                        overflow-y: hidden;
-                    `;
-
-                    // Main Title
-                    const title = document.createElement('div');
-                    title.innerText = 'MY SHARDS';
-                    title.style.cssText = `
-                        font-size: 2rem;
-                        font-weight: bold;
-                        color: #5c3d25;
-                        margin-bottom: 20px;
-                        font-family: 'SF Pro Rounded', sans-serif;
-                    `;
-                    shardsContent.appendChild(title);
-
-                    // --- Sub-Tabs Logic ---
-                    let currentShardTab: 'Hero' | 'Item' = 'Hero';
-
-                    // Sub-Tab Container
-                    const subTabContainer = document.createElement('div');
-                    subTabContainer.style.cssText = `
-                        display: flex;
-                        gap: 10px;
-                        margin-bottom: 20px;
-                        background: #3d2815;
-                        padding: 5px;
-                        border-radius: 25px;
-                        border: 1px solid #8b6542;
-                    `;
-
-                    const createSubTab = (name: 'Hero' | 'Item', label: string) => {
-                        const tab = document.createElement('div');
-                        tab.innerText = label;
-                        tab.style.cssText = `
-                            padding: 8px 24px;
-                            border-radius: 20px;
-                            cursor: pointer;
-                            font-family: 'SF Pro Rounded', sans-serif;
-                            font-weight: bold;
-                            font-size: 1rem;
-                            transition: all 0.2s;
-                        `;
-                        tab.onclick = () => {
-                            if (currentShardTab !== name) {
-                                currentShardTab = name;
-                                updateSubTabs();
-                                renderShardGrid();
-                            }
-                        };
-                        return tab;
-                    };
-
-                    const heroTabBtn = createSubTab('Hero', 'Hero Shards');
-                    const itemTabBtn = createSubTab('Item', 'Item Shards');
-
-                    subTabContainer.appendChild(heroTabBtn);
-                    subTabContainer.appendChild(itemTabBtn);
-                    shardsContent.appendChild(subTabContainer);
-
-                    const updateSubTabs = () => {
-                        const activeStyle = `background: #d97706; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);`;
-                        const inactiveStyle = `background: transparent; color: #a07850;`;
-
-                        heroTabBtn.style.cssText = heroTabBtn.style.cssText + (currentShardTab === 'Hero' ? activeStyle : inactiveStyle);
-                        itemTabBtn.style.cssText = itemTabBtn.style.cssText + (currentShardTab === 'Item' ? activeStyle : inactiveStyle);
-                    };
-
-                    // Grid Container
-                    const gridContainer = document.createElement('div');
-                    gridContainer.style.cssText = `
-                        width: 100%;
-                        flex: 1;
-                        overflow-y: auto;
-                        display: flex;
-                        justify-content: center;
-                    `;
-                    shardsContent.appendChild(gridContainer);
-
-                    const renderShardGrid = () => {
-                        gridContainer.innerHTML = '';
-                        const grid = document.createElement('div');
-                        grid.style.cssText = `
-                            display: grid;
-                            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-                            grid-auto-rows: min-content;
-                            gap: 20px;
-                            width: 90%;
-                            max-width: 1000px;
-                            padding-bottom: 40px;
-                        `;
-
-                        const inventory = this.currentUser.inventory || {};
-                        const allKeys = Object.keys(inventory).filter(k => inventory[k] > 0);
-                        let displayKeys: string[] = [];
-
-                        if (currentShardTab === 'Hero') {
-                            displayKeys = allKeys.filter(k => k.startsWith('shard_') && !k.endsWith('_shard'));
-                        } else {
-                            // Item Shards: Ends with '_shard' OR matches a known Map Shard ID
-                            const knownShardIds = Object.values(MAP_SHARD_DROPS).map(d => d.id);
-                            displayKeys = allKeys.filter(k =>
-                                k.endsWith('_shard') || knownShardIds.includes(k)
-                            );
-                        }
-
-                        if (displayKeys.length === 0) {
-                            const emptyMsg = document.createElement('div');
-                            emptyMsg.innerText = currentShardTab === 'Hero' ? 'No Hero Shards collected.' : 'No Item Shards collected.';
-                            emptyMsg.style.cssText = `color: #8b6542; font-size: 1.2rem; margin-top: 50px; font-family: 'SF Pro Rounded', sans-serif; text-align: center; width: 100%;`;
-                            gridContainer.appendChild(emptyMsg);
-                            return;
-                        }
-
-                        displayKeys.forEach(key => {
-                            const count = inventory[key];
-                            let displayName = key;
-                            let iconPath = '';
-                            let typeLabel = '';
-
-                            if (currentShardTab === 'Hero') {
-                                const heroCode = key.replace('shard_', '');
-                                const heroAsset = HERO_ASSETS.find(h => h.name === heroCode);
-                                displayName = heroAsset ? heroAsset.name : heroCode;
-                                typeLabel = 'Hero Shard';
-                                iconPath = '/assets/items/hero_shard.png'; // Fallback as headshot doesn't exist yet
-                            } else {
-                                // Find definition in MAP_SHARD_DROPS
-                                const def = Object.values(MAP_SHARD_DROPS).find(d => d.id === key);
-                                if (def) {
-                                    displayName = def.name;
-                                    iconPath = def.icon;
-                                } else {
-                                    // Fallback for unknown shards
-                                    displayName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                    iconPath = '/assets/item/shard-item/Tier 1/Ring of Life - shard.png'; // Generic fallback
-                                }
-                                typeLabel = 'Item Shard';
-                            }
-
-                            const card = document.createElement('div');
-                            card.style.cssText = `
-                                background: linear-gradient(135deg, #2b1d12 0%, #4a3222 100%);
-                                border: 2px solid #8b6542;
-                                border-radius: 15px;
-                                padding: 15px;
-                                display: flex;
-                                flex-direction: column;
-                                align-items: center;
-                                cursor: pointer;
-                                transition: transform 0.2s;
-                                position: relative;
-                            `;
-                            card.onmouseenter = () => card.style.transform = 'scale(1.03)';
-                            card.onmouseleave = () => card.style.transform = 'scale(1)';
-
-                            // Icon
-                            const iconEl = document.createElement('img');
-                            iconEl.src = iconPath;
-                            iconEl.style.cssText = `
-                                width: 64px; height: 64px;
-                                object-fit: contain;
-                                margin-bottom: 10px;
-                                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-                            `;
-                            card.appendChild(iconEl);
-
-                            // Name
-                            const nameEl = document.createElement('div');
-                            nameEl.innerText = displayName;
-                            nameEl.style.cssText = `
-                                color: #f5deb3;
-                                font-weight: bold;
-                                font-size: 1rem;
-                                text-align: center;
-                                margin-bottom: 5px;
-                                font-family: 'SF Pro Rounded', sans-serif;
-                                line-height: 1.2;
-                                height: 2.4em; /* Fixed height for 2 lines */
-                                display: flex; align-items: center; justify-content: center;
-                            `;
-                            card.appendChild(nameEl);
-
-                            // Count
-                            const countEl = document.createElement('div');
-                            countEl.innerText = `x${count}`;
-                            countEl.style.cssText = `
-                                color: #ffd700;
-                                font-size: 1.4rem;
-                                font-weight: bold;
-                                font-family: 'SF Pro Rounded', sans-serif;
-                                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-                            `;
-                            card.appendChild(countEl);
-
-                            grid.appendChild(card);
-                        });
-                        gridContainer.appendChild(grid);
-                    };
-
-                    updateSubTabs();
-                    renderShardGrid();
-                    contentArea.appendChild(shardsContent);
-
                 } else if (tabName === 'Gallery') {
                     // Gallery Tab: Show all heroes from HERO_ASSETS
                     const galleryContent = document.createElement('div');
@@ -1360,6 +1179,7 @@ export class UIManager {
                         };
 
                         // Hero Image Container with sprite preview
+
                         const imgContainer = document.createElement('div');
                         imgContainer.style.cssText = `
                             width: 150px;
@@ -1373,53 +1193,31 @@ export class UIManager {
                             align-items: center;
                         `;
 
-                        // Use sprite first frame as preview (zoomed in on face)
+                        // Use portrait image
                         if (hero.sprite2D) {
                             const displaySize = 150; // Match container
-                            const framesPerRow = hero.sprite2D.framesPerRow;
-                            const totalRows = Math.ceil(hero.sprite2D.totalFrames / framesPerRow);
-                            const scaledSheetWidth = framesPerRow * displaySize;
-                            const scaledSheetHeight = totalRows * displaySize;
 
-                            const spritePreview = document.createElement('div');
-                            spritePreview.style.cssText = `
+                            // Derive portrait path from spritesheet path
+                            const spritePath = hero.sprite2D.spritesheetPath;
+                            const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+                            let portraitPath = '';
+                            if (heroFolderMatch) {
+                                const heroFolder = heroFolderMatch[1];
+                                const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace('_with_anim_spritesheets', '').replace(/_/g, ' ');
+                                portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+                            }
+
+                            const portraitPreview = document.createElement('div');
+                            portraitPreview.style.cssText = `
                                 width: ${displaySize}px;
                                 height: ${displaySize}px;
-                                background-image: url('${hero.sprite2D.spritesheetPath}');
-                                background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                                background-position: 0 0;
+                                background-image: url('${portraitPath}');
+                                background-size: cover;
+                                background-position: center;
                                 background-repeat: no-repeat;
-                                transform: scale(6) translateX(3%) translateY(-25%);
-                                transform-origin: center top;
-                                filter: saturate(0.7) contrast(1.3) brightness(1.5);
+                                filter: saturate(1.1) contrast(1.1);
                             `;
-                            imgContainer.appendChild(spritePreview);
-
-                            // Animate sprite on hover (handles grid layout)
-                            let frameIndex = 0;
-                            let animInterval: number | null = null;
-                            card.onmouseover = () => {
-                                card.style.transform = 'translateY(-5px) scale(1.02)';
-                                card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.4)';
-                                card.style.borderColor = '#ffd700';
-                                animInterval = window.setInterval(() => {
-                                    frameIndex = (frameIndex + 1) % hero.sprite2D!.totalFrames;
-                                    const col = frameIndex % framesPerRow;
-                                    const row = Math.floor(frameIndex / framesPerRow);
-                                    spritePreview.style.backgroundPosition = `-${col * displaySize}px -${row * displaySize}px`;
-                                }, 1000 / (hero.sprite2D!.fps || 12));
-                            };
-                            card.onmouseout = () => {
-                                card.style.transform = '';
-                                card.style.boxShadow = '';
-                                card.style.borderColor = '#8b6542';
-                                if (animInterval) {
-                                    clearInterval(animInterval);
-                                    animInterval = null;
-                                }
-                                frameIndex = 0;
-                                spritePreview.style.backgroundPosition = '0 0';
-                            };
+                            imgContainer.appendChild(portraitPreview);
                         } else {
                             // Fallback placeholder
                             const placeholder = document.createElement('div');
@@ -1546,23 +1344,28 @@ export class UIManager {
 
                             if (asset && asset.sprite2D) {
                                 const displaySize = 120;
-                                const framesPerRow = asset.sprite2D.framesPerRow;
-                                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
-                                const scaledSheetWidth = framesPerRow * displaySize;
-                                const scaledSheetHeight = totalRows * displaySize;
 
-                                const spritePreview = document.createElement('div');
-                                spritePreview.style.cssText = `
+                                // Derive portrait path from spritesheet path
+                                const spritePath = asset.sprite2D.spritesheetPath;
+                                const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+                                let portraitPath = '';
+                                if (heroFolderMatch) {
+                                    const heroFolder = heroFolderMatch[1];
+                                    const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace('_with_anim_spritesheets', '').replace(/_/g, ' ');
+                                    portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+                                }
+
+                                const portraitPreview = document.createElement('div');
+                                portraitPreview.style.cssText = `
                                     width: ${displaySize}px;
                                     height: ${displaySize}px;
-                                    background-image: url('${asset.sprite2D.spritesheetPath}');
-                                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                                    background-position: 0 0;
+                                    background-image: url('${portraitPath}');
+                                    background-size: cover;
+                                    background-position: center;
                                     background-repeat: no-repeat;
-                                    transform: scale(2.5) translateY(15%);
-                                    transform-origin: center center;
+                                    filter: saturate(1.1) contrast(1.1);
                                 `;
-                                slot.appendChild(spritePreview);
+                                slot.appendChild(portraitPreview);
                             }
 
                             // Remove button
@@ -2100,26 +1903,31 @@ export class UIManager {
                                 renderHeroGrid();
                             };
 
-                            // Sprite preview
+                            // Portrait preview
                             if (asset.sprite2D) {
                                 const displaySize = 100;
-                                const framesPerRow = asset.sprite2D.framesPerRow;
-                                const totalRows = Math.ceil(asset.sprite2D.totalFrames / framesPerRow);
-                                const scaledSheetWidth = framesPerRow * displaySize;
-                                const scaledSheetHeight = totalRows * displaySize;
 
-                                const spritePreview = document.createElement('div');
-                                spritePreview.style.cssText = `
+                                // Derive portrait path from spritesheet path
+                                const spritePath = asset.sprite2D.spritesheetPath;
+                                const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+                                let portraitPath = '';
+                                if (heroFolderMatch) {
+                                    const heroFolder = heroFolderMatch[1];
+                                    const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace('_with_anim_spritesheets', '').replace(/_/g, ' ');
+                                    portraitPath = `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+                                }
+
+                                const portraitPreview = document.createElement('div');
+                                portraitPreview.style.cssText = `
                                     width: ${displaySize}px;
                                     height: ${displaySize}px;
-                                    background-image: url('${asset.sprite2D.spritesheetPath}');
-                                    background-size: ${scaledSheetWidth}px ${scaledSheetHeight}px;
-                                    background-position: 0 0;
+                                    background-image: url('${portraitPath}');
+                                    background-size: cover;
+                                    background-position: center;
                                     background-repeat: no-repeat;
-                                    transform: scale(2.8) translateY(18%);
-                                    transform-origin: center center;
+                                    filter: saturate(1.1) contrast(1.1);
                                 `;
-                                card.appendChild(spritePreview);
+                                card.appendChild(portraitPreview);
                             }
 
                             // Stars at bottom
@@ -2192,7 +2000,7 @@ export class UIManager {
             // Function to update tab styles
             const updateTabStyles = () => {
                 tabElements.forEach((tab, index) => {
-                    const tabName = ['Heroes', 'Shards', 'Gallery', 'Deployment'][index];
+                    const tabName = ['Heroes', 'Gallery', 'Deployment'][index];
                     if (tabName === activeTab) {
                         tab.style.background = 'linear-gradient(180deg, #a07850 0%, #6b4830 100%)';
                         tab.style.color = '#fff';
@@ -2221,7 +2029,7 @@ export class UIManager {
                 pointer-events: auto;
             `;
 
-            const tabs = ['Heroes', 'Shards', 'Gallery', 'Deployment'];
+            const tabs = ['Heroes', 'Gallery', 'Deployment'];
             tabs.forEach(tabName => {
                 const tab = document.createElement('div');
                 tab.innerText = tabName;
@@ -2703,5 +2511,48 @@ export class UIManager {
             // Ensure login is below loading screen if it's still fading out
             if (this.uiContainer) this.uiContainer.appendChild(login.getElement());
         }
+    }
+
+    private handleShardBuild(shardId: string) {
+        if (!this.currentUser) return;
+
+        // Dynamic import to ensure we have latest logic/types
+        import('../data/ItemSystem').then(({ canBuildFromShards, getItemById, SHARD_TO_ITEM_MAPPING }) => {
+            const result = canBuildFromShards(shardId, this.currentUser!.inventory || {});
+
+            if (!result.canBuild) {
+                console.warn('[UIManager] Cannot build:', result.reason);
+                return;
+            }
+
+            // Deduct shards
+            const cost = result.cost || 0;
+            if (this.currentUser!.inventory) {
+                this.currentUser!.inventory[shardId] -= cost;
+                if (this.currentUser!.inventory[shardId] <= 0) delete this.currentUser!.inventory[shardId];
+            }
+
+            // Add item
+            const itemId = SHARD_TO_ITEM_MAPPING[shardId];
+            const itemDef = getItemById(itemId);
+
+            if (itemDef) {
+                if (!this.currentUser!.inventory) this.currentUser!.inventory = {};
+                const inv = this.currentUser!.inventory as any;
+                const current = inv[itemId] || 0;
+                inv[itemId] = current + 1;
+
+                console.log(`[UIManager] Built ${itemDef.name}!`);
+
+                // Update ShardsUI
+                if (this.shardsUI) {
+                    this.shardsUI.update(this.currentUser!);
+                }
+
+                console.log(`Successfully crafted ${itemDef.name}!`);
+
+                this.syncUser();
+            }
+        });
     }
 }
