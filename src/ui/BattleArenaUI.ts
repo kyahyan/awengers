@@ -226,7 +226,8 @@ export class BattleArenaUI {
                 if (basePath) {
                     Object.keys(ANIM_FRAMES).forEach(anim => {
                         // OPTIMIZATION: Skip heavy unused assets for battle
-                        if (anim === 'showidle' || anim === 'dizzy' || anim === 'win') return;
+                        // dizzy is needed for stun!
+                        if (anim === 'showidle' || anim === 'win') return;
                         assetsToLoad.push(basePath.replace('idle', anim));
                     });
                 }
@@ -266,7 +267,7 @@ export class BattleArenaUI {
                 if (enemyDef.icon) assetsToLoad.push(enemyDef.icon);
                 if (enemyDef.sprite && enemyDef.sprite.animations) {
                     Object.entries(enemyDef.sprite.animations).forEach(([key, anim]) => {
-                        if (key === 'showidle' || key === 'dizzy' || key === 'win') return;
+                        if (key === 'showidle' || key === 'win') return; // Loop dizzy for enemies too? Yes.
                         if (anim.file) assetsToLoad.push(`${enemyDef.sprite.basePath}${anim.file}`);
                     });
                 }
@@ -279,9 +280,11 @@ export class BattleArenaUI {
                 if (config?.sprite2D) addAnimPaths(config.sprite2D.spritesheetPath);
             });
 
-            if (assetsToLoad.length === 0) return;
-            const uniqueAssets = [...new Set(assetsToLoad)];
+            // Flatten and Dedup
+            const uniqueAssets = Array.from(new Set(assetsToLoad));
+            console.log(`[Battle] Preloading ${uniqueAssets.length} assets...`);
 
+            // Batched Loading with Decode
             const loadAll = async () => {
                 const BATCH_SIZE = 5;
                 for (let i = 0; i < uniqueAssets.length; i += BATCH_SIZE) {
@@ -306,7 +309,10 @@ export class BattleArenaUI {
                 }
             };
 
-            await Promise.race([loadAll(), new Promise(r => setTimeout(r, 10000))]);
+            // Increase timeout to 30s to ensure everything loads
+            // If it takes longer, user waits, but battle will be smooth.
+            await Promise.race([loadAll(), new Promise(r => setTimeout(r, 30000))]);
+            console.log('[Battle] Assets preloaded (or timed out)');
         } catch (e) { console.error('Asset preload failed', e); }
     }
 
@@ -855,6 +861,7 @@ export class BattleArenaUI {
         entity.currentAnim = type;
         const newPath = entity.baseConfig.spritesheetPath.replace('idle', type);
         entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
+        entity.spriteEl.style.backgroundPosition = '0 0'; // Prevent 1-frame blink with old position
         entity.currentAnimTotalFrames = ANIM_FRAMES[type] || 24;
         entity.loopAnim = loop;
         entity.onAnimComplete = onComplete;
