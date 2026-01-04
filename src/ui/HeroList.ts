@@ -451,23 +451,47 @@ export class HeroList {
         const card = document.createElement('div');
         card.className = 'hero-card';
 
-        // Star-based border colors
+        // Star-based border colors with glow effect
         let borderColor = '#d4af37'; // Default Gold
-        if (hero.stars === 1) borderColor = '#22c55e'; // Green
-        else if (hero.stars === 2) borderColor = '#3b82f6'; // Blue
-        else if (hero.stars === 3) borderColor = '#eab308'; // Yellow
-        else if (hero.stars === 4) borderColor = '#f97316'; // Orange
-        else if (hero.stars === 5) borderColor = '#ef4444'; // Red
+        let glowColor = 'rgba(212, 175, 55, 0.6)';
+        if (hero.stars === 1) {
+            borderColor = '#4ade80'; // Bright Green
+            glowColor = 'rgba(74, 222, 128, 0.7)';
+        } else if (hero.stars === 2) {
+            borderColor = '#60a5fa'; // Bright Blue
+            glowColor = 'rgba(96, 165, 250, 0.7)';
+        } else if (hero.stars === 3) {
+            borderColor = '#facc15'; // Bright Yellow
+            glowColor = 'rgba(250, 204, 21, 0.7)';
+        } else if (hero.stars === 4) {
+            borderColor = '#fb923c'; // Bright Orange
+            glowColor = 'rgba(251, 146, 60, 0.7)';
+        } else if (hero.stars === 5) {
+            borderColor = '#f472b6'; // Bright Pink/Magenta
+            glowColor = 'rgba(244, 114, 182, 0.7)';
+        }
 
-        // Basic card styling to match the new design
+        // Card styling with glowing border effect matching reference
         card.style.cssText = `
-            width: 180px; height: 180px; 
-            background: #2a2a2a; 
-            border: 3px solid ${borderColor};
-            border-radius: 12px; 
+            width: 180px; height: 220px; 
+            background: linear-gradient(145deg, ${borderColor} 0%, ${borderColor}88 50%, ${borderColor} 100%);
+            border: none;
+            border-radius: 16px; 
+            padding: 4px;
             position: relative; 
             cursor: pointer;
-            transition: transform 0.1s;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 15px ${glowColor}, 0 0 30px ${glowColor}44, inset 0 0 8px rgba(255,255,255,0.1);
+        `;
+
+        // Inner container for the actual card content
+        const innerCard = document.createElement('div');
+        innerCard.style.cssText = `
+            width: 100%; height: 100%;
+            background: #1a1a2e;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
         `;
 
         // Selection Logic Reuse
@@ -515,9 +539,15 @@ export class HeroList {
         };
         card.onclick = clickHandler;
 
-        // Hover effect (scale only, no animation)
-        card.onmouseenter = () => { card.style.transform = 'scale(1.05)'; };
-        card.onmouseleave = () => { card.style.transform = 'scale(1)'; };
+        // Hover effect with enhanced glow
+        card.onmouseenter = () => {
+            card.style.transform = 'scale(1.05)';
+            card.style.boxShadow = `0 0 20px ${glowColor}, 0 0 40px ${glowColor}, 0 0 60px ${glowColor}66`;
+        };
+        card.onmouseleave = () => {
+            card.style.transform = 'scale(1)';
+            card.style.boxShadow = `0 0 15px ${glowColor}, 0 0 30px ${glowColor}44, inset 0 0 8px rgba(255,255,255,0.1)`;
+        };
 
         // --- Inner Content ---
 
@@ -530,10 +560,10 @@ export class HeroList {
         if (hero.attribute === 'Agility') iconPath = '/assets/attr/attribute/agi.svg';
         if (hero.attribute === 'Intelligence') iconPath = '/assets/attr/attribute/int.svg';
 
-        // Stars HTML
+        // Stars HTML (smaller size)
         let starsHtml = '';
         for (let i = 0; i < hero.stars; i++) {
-            starsHtml += `<span style="color: #fbbf24; font-size: 2rem; margin: 0 -2px;">★</span>`;
+            starsHtml += `<span style="color: #fbbf24; font-size: 1.2rem; margin: 0 -1px;">★</span>`;
         }
 
         const asset = HERO_ASSETS.find(a => a.name === hero.name);
@@ -613,63 +643,83 @@ export class HeroList {
             speciesColor = '#7f1d1d'; // Dark Red/Brown
         }
 
-        card.innerHTML = `
+        // Build the inner card with the portrait and overlays
+        innerCard.innerHTML = `
+            <!-- Card Image (Background) -->
+            <div class="card-image-slot" style="width:100%; height:100%; position: absolute; top: 0; left: 0;"></div>
+
+            <!-- Bottom Info Bar -->
+            <div style="
+                position: absolute; bottom: 0; left: 0; right: 0;
+                z-index: 10;
+            ">
+                <!-- Level Bar with border color background -->
+                <div style="
+                    background: ${borderColor}cc;
+                    padding: 5px 0;
+                    text-align: center;
+                ">
+                    <span style="
+                        color: #fff; 
+                        font-size: 0.95rem; 
+                        font-weight: 700;
+                        font-family: 'SF Pro Rounded', sans-serif;
+                        text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+                    ">Level ${hero.level}</span>
+                </div>
+                <!-- Stars Row -->
+                <div style="
+                    background: rgba(0, 0, 0, 0.8);
+                    padding: 4px 0 6px 0;
+                    display: flex; justify-content: center; gap: 1px;
+                    border-radius: 0 0 8px 8px;
+                ">
+                    ${starsHtml}
+                </div>
+            </div>
+        `;
+
+        // Append the inner card to the main card (creates the border frame effect)
+        card.appendChild(innerCard);
+
+        // Icons are absolute positioned on the CARD (outer element) so they overlap the border
+        const iconsHtml = `
             <!-- Attribute Icon (Top Left) -->
             <div style="
                 position: absolute; top: -8px; left: -8px; 
                 width: 28px; height: 28px; 
-                background: ${attrColor}; border: 1px solid #fff; border-radius: 50%;
-                display: flex; justify-content: center; align-items: center; z-index: 10;
-                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                background: ${attrColor}; border: 2px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 20;
+                box-shadow: 2px 2px 6px rgba(0,0,0,0.6);
             " title="Attribute: ${hero.attribute}">
-                <img src="${iconPath}" style="width: 18px; height: 18px; filter: brightness(0) invert(1);">
+                <img src="${iconPath}" style="width: 16px; height: 16px; filter: brightness(0) invert(1);">
             </div>
 
             <!-- Class Icon (Below Attribute) -->
             <div style="
-                position: absolute; top: 24px; left: -8px; 
+                position: absolute; top: 26px; left: -8px; 
                 width: 28px; height: 28px; 
-                background: ${classColor}; border: 1px solid #fff; border-radius: 50%;
-                display: flex; justify-content: center; align-items: center; z-index: 9;
-                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                background: ${classColor}; border: 2px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 19;
+                box-shadow: 2px 2px 6px rgba(0,0,0,0.6);
             " title="Class: ${heroClass}">
-                <span style="font-size: 14px;">${classIconChar}</span>
+                <span style="font-size: 13px;">${classIconChar}</span>
             </div>
 
             <!-- Species Icon (Below Class) -->
             <div style="
-                position: absolute; top: 56px; left: -8px; 
+                position: absolute; top: 60px; left: -8px; 
                 width: 28px; height: 28px; 
-                background: ${speciesColor}; border: 1px solid #fff; border-radius: 50%;
-                display: flex; justify-content: center; align-items: center; z-index: 8;
-                box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                background: ${speciesColor}; border: 2px solid #fff; border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; z-index: 18;
+                box-shadow: 2px 2px 6px rgba(0,0,0,0.6);
             " title="Species: ${heroSpecies}">
-                <span style="font-size: 14px;">${speciesIconChar}</span>
-            </div>
-
-            <!-- Level (Top Right) -->
-                <div style="
-                position: absolute; top: 5px; right: 8px; 
-                color: #fff; font-size: 1.1rem; font-weight: bold; text-shadow: 1px 1px 2px #000;
-                z-index: 10; font-family: 'SF Pro Rounded', sans-serif;
-            ">${hero.level}</div>
-
-            <!-- Card Image (Appended via JS) -->
-            <div class="card-image-slot" style="width:100%; height:100%;"></div>
-
-            <!-- Stars (Bottom) -->
-            <div style="
-                position: absolute; bottom: 5px; 
-                width: 100%; text-align: center; 
-                display: flex; justify-content: center;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-                z-index: 10;
-            ">
-                ${starsHtml}
+                <span style="font-size: 13px;">${speciesIconChar}</span>
             </div>
         `;
+        card.insertAdjacentHTML('beforeend', iconsHtml);
 
-        card.querySelector('.card-image-slot')?.appendChild(imgContainer);
+        innerCard.querySelector('.card-image-slot')?.appendChild(imgContainer);
 
         return card;
     }

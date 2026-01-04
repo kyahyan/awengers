@@ -714,12 +714,44 @@ export class BattleArenaUI {
 
     private updateStatusUI(entity: BattleEntity) {
         entity.statusContainer.innerHTML = '';
+
+        // Create inner wrapper for icons that can animate/scroll
+        const innerWrapper = document.createElement('div');
+        innerWrapper.style.cssText = `display: flex; gap: 2px; flex-shrink: 0;`;
+
         entity.effects.forEach(e => {
             const icon = document.createElement('div');
             icon.innerText = e.icon;
-            icon.style.cssText = `font-size: 14px; background: rgba(0,0,0,0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);`;
-            entity.statusContainer.appendChild(icon);
+            icon.style.cssText = `font-size: 14px; background: rgba(0,0,0,0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;`;
+            innerWrapper.appendChild(icon);
         });
+
+        entity.statusContainer.appendChild(innerWrapper);
+
+        // Check if content overflows and add marquee animation
+        // Each icon is approx 22px wide (14px font + 4px padding + 2px border + 2px gap)
+        const iconWidth = 22;
+        const containerWidth = 100;
+        const totalIconsWidth = entity.effects.length * iconWidth;
+
+        if (totalIconsWidth > containerWidth) {
+            // Add CSS animation for marquee effect
+            const scrollDistance = totalIconsWidth - containerWidth + 10; // Extra padding
+            innerWrapper.style.animation = `buffMarquee 1s linear infinite alternate`;
+
+            // Inject keyframes if not already present
+            if (!document.getElementById('buff-marquee-style')) {
+                const style = document.createElement('style');
+                style.id = 'buff-marquee-style';
+                style.textContent = `
+                    @keyframes buffMarquee {
+                        0% { transform: translateX(0); }
+                        100% { transform: translateX(calc(-100% + 100px)); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
     }
 
     private applyDamage(target: BattleEntity, scale: number, attacker: BattleEntity, isMultiHit: boolean = false, forceCrit: boolean = false) {
@@ -856,17 +888,43 @@ export class BattleArenaUI {
 
         // Check if this is an enemy entity with enemyDef
 
-
         if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
-        entity.currentAnim = type;
-        const newPath = entity.baseConfig.spritesheetPath.replace('idle', type);
-        entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
-        entity.spriteEl.style.backgroundPosition = '0 0'; // Prevent 1-frame blink with old position
-        entity.currentAnimTotalFrames = ANIM_FRAMES[type] || 24;
-        entity.loopAnim = loop;
-        entity.onAnimComplete = onComplete;
-        entity.animFrame = 0;
 
+        const newPath = entity.baseConfig.spritesheetPath.replace('idle', type);
+
+        // Preload the new sprite to prevent blinking
+        const preloadAndPlay = () => {
+            entity.currentAnim = type;
+            entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
+            entity.spriteEl.style.backgroundPosition = '0 0';
+            entity.currentAnimTotalFrames = ANIM_FRAMES[type] || 24;
+            entity.loopAnim = loop;
+            entity.onAnimComplete = onComplete;
+            entity.animFrame = 0;
+            this.runAnimationLoop(entity, type, loop);
+        };
+
+        // Check if already using this animation
+        if (entity.currentAnim === type) {
+            preloadAndPlay();
+            return;
+        }
+
+        // Preload the new sprite image
+        const img = new Image();
+        img.onload = preloadAndPlay;
+        img.onerror = preloadAndPlay; // Still play even if load fails
+        img.src = encodeURI(newPath);
+
+        // Fallback: if image takes too long, just play anyway
+        setTimeout(() => {
+            if (entity.currentAnim !== type) {
+                preloadAndPlay();
+            }
+        }, 50);
+    }
+
+    private runAnimationLoop(entity: BattleEntity, type: string, loop: boolean) {
         const spriteSize = 400;
         const isIdle = type === 'idle';
 
@@ -940,10 +998,35 @@ export class BattleArenaUI {
         }
     }
     private showFloatingText(targetEl: HTMLElement, text: string, isCrit: boolean) {
-        const el = document.createElement('div'); el.className = 'floating-damage'; el.innerText = text;
-        if (isCrit) { el.style.color = '#fbbf24'; el.style.fontSize = '3rem'; el.style.textShadow = '0 0 10px rgba(251, 191, 36, 0.8)'; }
-        const randomX = (Math.random() - 0.5) * 50; el.style.left = `calc(50% + ${randomX}px)`; el.style.top = '0px';
-        targetEl.appendChild(el); setTimeout(() => el.remove(), 1000 / this.battleSpeed);
+        const el = document.createElement('div');
+        el.className = 'floating-damage';
+        el.innerText = text;
+
+        // Red damage color with dark stroke outline like reference
+        el.style.cssText = `
+            position: absolute;
+            font-family: 'SF Pro Display', sans-serif;
+            font-weight: 900;
+            font-size: ${isCrit ? '2.5rem' : '1.8rem'};
+            color: ${isCrit ? '#fbbf24' : '#ef4444'};
+            -webkit-text-stroke: 3px #000;
+            paint-order: stroke fill;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 3px 0 #000;
+            animation: floatUpFade 0.8s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 1000;
+            will-change: transform, opacity;
+            pointer-events: none;
+        `;
+
+        if (isCrit) {
+            el.style.textShadow = '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 0 15px rgba(251, 191, 36, 0.8)';
+        }
+
+        const randomX = (Math.random() - 0.5) * 50;
+        el.style.left = `calc(50% + ${randomX}px)`;
+        el.style.top = '80px';
+        targetEl.appendChild(el);
+        setTimeout(() => el.remove(), 1000 / this.battleSpeed);
     }
 
 
@@ -1142,21 +1225,38 @@ export class BattleArenaUI {
         levelText.style.cssText = `color: #fff; font-size: 1.2rem; font-weight: 900; line-height: 1; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; font-family: 'SF Pro Display';`;
         overheadUI.appendChild(levelText);
 
-        const elementIcon = document.createElement('img'); elementIcon.src = data.icon;
-        elementIcon.style.cssText = `width: 24px; height: 24px; background: #000; border-radius: 50%; display: block; border: 1px solid #fff; object-fit: contain; padding: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);`;
+        // Determine attribute icon based on hero type
+        let attrIconPath = '/assets/attr/attribute/str.svg'; // Default Strength
+        let attrBgColor = '#dc2626'; // Red
+        if (data.type === 'Agility') {
+            attrIconPath = '/assets/attr/attribute/agi.svg';
+            attrBgColor = '#16a34a'; // Green
+        } else if (data.type === 'Intelligence') {
+            attrIconPath = '/assets/attr/attribute/int.svg';
+            attrBgColor = '#2563eb'; // Blue
+        }
+
+        const elementIcon = document.createElement('div');
+        elementIcon.style.cssText = `width: 28px; height: 28px; background: ${attrBgColor}; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.5);`;
+        const iconImg = document.createElement('img');
+        iconImg.src = attrIconPath;
+        iconImg.style.cssText = `width: 16px; height: 16px; filter: brightness(0) invert(1);`;
+        elementIcon.appendChild(iconImg);
         overheadUI.appendChild(elementIcon);
 
-        const barsContainer = document.createElement('div'); barsContainer.style.cssText = `display: flex; flex-direction: column; gap: 2px; position:relative;`;
+        const barsContainer = document.createElement('div'); barsContainer.style.cssText = `display: flex; flex-direction: column; gap: 0; position:relative;`;
         const statusContainer = document.createElement('div');
-        statusContainer.style.cssText = `position: absolute; bottom: 100%; left: 0; width: 100%; display: flex; gap: 2px; margin-bottom: 2px;`;
+        statusContainer.style.cssText = `position: absolute; bottom: 100%; left: 0; width: 100px; max-width: 100px; display: flex; gap: 2px; margin-bottom: 2px; overflow: hidden;`;
         barsContainer.appendChild(statusContainer);
 
-        const hpBarTrack = document.createElement('div'); hpBarTrack.style.cssText = `width: 100px; height: 10px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
-        const hpBarFill = document.createElement('div'); hpBarFill.style.cssText = `width: 100%; height: 100%; background: ${id === 'enemy' ? '#ef4444' : '#4ade80'}; transition: width 0.2s ease-out;`;
+        // HP Bar - Main health bar with rounded top corners
+        const hpBarTrack = document.createElement('div'); hpBarTrack.style.cssText = `width: 100px; height: 14px; background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%); border: 2px solid #333; border-bottom: none; border-radius: 7px 7px 0 0; position: relative; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);`;
+        const hpBarFill = document.createElement('div'); hpBarFill.style.cssText = `width: 100%; height: 100%; background: ${id === 'enemy' ? 'linear-gradient(180deg, #f87171 0%, #dc2626 50%, #b91c1c 100%)' : 'linear-gradient(180deg, #86efac 0%, #22c55e 50%, #15803d 100%)'}; transition: width 0.2s ease-out;`;
         hpBarTrack.appendChild(hpBarFill); barsContainer.appendChild(hpBarTrack);
 
-        const apBarTrack = document.createElement('div'); apBarTrack.style.cssText = `width: 100px; height: 6px; background: #000; border: 1px solid rgba(255,255,255,0.3); border-radius: 2px; position: relative; overflow: hidden;`;
-        const apBarFill = document.createElement('div'); apBarFill.style.cssText = `width: 0%; height: 100%; background: #fbbf24; transition: width 0.1s linear;`;
+        // AP Bar - Cooldown/action bar with rounded bottom corners, attached to HP bar
+        const apBarTrack = document.createElement('div'); apBarTrack.style.cssText = `width: 100px; height: 8px; background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%); border: 2px solid #333; border-top: 1px solid #222; border-radius: 0 0 7px 7px; position: relative; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);`;
+        const apBarFill = document.createElement('div'); apBarFill.style.cssText = `width: 0%; height: 100%; background: linear-gradient(180deg, #fcd34d 0%, #fbbf24 50%, #d97706 100%); transition: width 0.1s linear;`;
         apBarTrack.appendChild(apBarFill); barsContainer.appendChild(apBarTrack);
 
         overheadUI.appendChild(barsContainer); container.appendChild(overheadUI);

@@ -128,6 +128,113 @@ export class SettingsUI {
         setContent.style.alignItems = 'center';
         setContent.innerHTML = ``; // Clear placeholder
 
+        // Graphics Quality Section
+        const graphicsGroup = document.createElement('div');
+        graphicsGroup.style.display = 'flex';
+        graphicsGroup.style.flexDirection = 'column';
+        graphicsGroup.style.alignItems = 'center';
+        graphicsGroup.style.gap = '15px';
+        graphicsGroup.style.marginTop = '30px';
+        graphicsGroup.style.width = '100%';
+        graphicsGroup.style.padding = '0 40px';
+        graphicsGroup.style.boxSizing = 'border-box';
+
+        const graphicsLabel = document.createElement('div');
+        graphicsLabel.innerText = 'Graphics Quality';
+        graphicsLabel.style.color = '#fff';
+        graphicsLabel.style.fontSize = '1.3rem';
+        graphicsLabel.style.fontWeight = 'bold';
+        graphicsLabel.style.fontFamily = "'SF Pro Display', sans-serif";
+        graphicsLabel.style.textShadow = '0 2px 4px rgba(0,0,0,0.5)';
+        graphicsGroup.appendChild(graphicsLabel);
+
+        const qualityOptions = ['High', 'Mid', 'Low'];
+        const currentQuality = localStorage.getItem('awengers_graphics_quality') || 'High';
+
+        const qualityContainer = document.createElement('div');
+        qualityContainer.style.display = 'flex';
+        qualityContainer.style.gap = '15px';
+
+        qualityOptions.forEach((quality) => {
+            const btn = document.createElement('div');
+            btn.innerText = quality;
+            btn.style.padding = '12px 30px';
+            btn.style.borderRadius = '8px';
+            btn.style.cursor = 'pointer';
+            btn.style.fontFamily = "'SF Pro Display', sans-serif";
+            btn.style.fontSize = '1.1rem';
+            btn.style.fontWeight = 'bold';
+            btn.style.transition = 'all 0.2s';
+            btn.style.textShadow = '0 1px 2px rgba(0,0,0,0.3)';
+
+            const isActive = currentQuality === quality;
+            if (isActive) {
+                btn.style.background = 'linear-gradient(180deg, #ffd700, #cc9900)';
+                btn.style.color = '#1a1a2e';
+                btn.style.border = '2px solid #ffec8b';
+                btn.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
+            } else {
+                btn.style.background = 'rgba(50, 50, 70, 0.8)';
+                btn.style.color = '#aaa';
+                btn.style.border = '2px solid rgba(100, 100, 120, 0.5)';
+            }
+
+            btn.onmouseenter = () => {
+                if (localStorage.getItem('awengers_graphics_quality') !== quality) {
+                    btn.style.background = 'rgba(70, 70, 100, 0.9)';
+                    btn.style.color = '#fff';
+                    btn.style.transform = 'scale(1.05)';
+                }
+            };
+
+            btn.onmouseleave = () => {
+                const currentActive = localStorage.getItem('awengers_graphics_quality') || 'High';
+                if (currentActive !== quality) {
+                    btn.style.background = 'rgba(50, 50, 70, 0.8)';
+                    btn.style.color = '#aaa';
+                    btn.style.transform = 'scale(1.0)';
+                }
+            };
+
+            btn.onclick = () => {
+                localStorage.setItem('awengers_graphics_quality', quality);
+
+                // Update all buttons
+                qualityContainer.querySelectorAll('div').forEach((b, idx) => {
+                    const q = qualityOptions[idx];
+                    if (q === quality) {
+                        (b as HTMLElement).style.background = 'linear-gradient(180deg, #ffd700, #cc9900)';
+                        (b as HTMLElement).style.color = '#1a1a2e';
+                        (b as HTMLElement).style.border = '2px solid #ffec8b';
+                        (b as HTMLElement).style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
+                    } else {
+                        (b as HTMLElement).style.background = 'rgba(50, 50, 70, 0.8)';
+                        (b as HTMLElement).style.color = '#aaa';
+                        (b as HTMLElement).style.border = '2px solid rgba(100, 100, 120, 0.5)';
+                        (b as HTMLElement).style.boxShadow = 'none';
+                    }
+                });
+
+                // Dispatch event for other parts of the app to listen
+                window.dispatchEvent(new CustomEvent('graphicsQualityChanged', { detail: { quality } }));
+            };
+
+            qualityContainer.appendChild(btn);
+        });
+
+        graphicsGroup.appendChild(qualityContainer);
+
+        // Quality description
+        const qualityDesc = document.createElement('div');
+        qualityDesc.style.color = '#888';
+        qualityDesc.style.fontSize = '0.85rem';
+        qualityDesc.style.textAlign = 'center';
+        qualityDesc.style.marginTop = '5px';
+        qualityDesc.innerText = 'Adjust graphics quality for better performance';
+        graphicsGroup.appendChild(qualityDesc);
+
+        setContent.appendChild(graphicsGroup);
+
         // Logout Button
         const logoutBtn = document.createElement('div');
         logoutBtn.innerText = 'LOGOUT';

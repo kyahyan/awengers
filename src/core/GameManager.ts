@@ -15,6 +15,8 @@ export class GameManager {
     private heroes: (Hero | SpriteHero)[] = [];
     private clock: THREE.Clock;
 
+    private dirLight!: THREE.DirectionalLight;
+
     constructor() {
         this.scene = new THREE.Scene();
         // this.scene.background = new THREE.Color(0x000000); // Solid Black Background
@@ -46,10 +48,10 @@ export class GameManager {
         const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 2);
         this.scene.add(hemiLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 2.5); // Very bright sun
-        dirLight.position.set(10, 20, 10);
-        dirLight.castShadow = true;
-        this.scene.add(dirLight);
+        this.dirLight = new THREE.DirectionalLight(0xffffff, 2.5); // Very bright sun
+        this.dirLight.position.set(10, 20, 10);
+        this.dirLight.castShadow = true;
+        this.scene.add(this.dirLight);
 
         this.uiManager = new UIManager();
         this.uiManager.setDebugText('Game Initialized - Waiting for Login');
@@ -75,7 +77,66 @@ export class GameManager {
         window.addEventListener('resize', () => this.onWindowResize(), false);
         this.onWindowResize(); // Force initial scale
 
+        // Apply initial graphics quality
+        this.applyGraphicsQuality(localStorage.getItem('awengers_graphics_quality') || 'High');
+
+        // Listen for graphics quality changes
+        window.addEventListener('graphicsQualityChanged', (e: Event) => {
+            const customEvent = e as CustomEvent;
+            this.applyGraphicsQuality(customEvent.detail.quality);
+        });
+
         this.animate();
+    }
+
+    private applyGraphicsQuality(quality: string) {
+        console.log(`[GameManager] Applying graphics quality: ${quality}`);
+
+        switch (quality) {
+            case 'High':
+                // High Quality: Full pixel ratio, high shadow quality
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                if (this.dirLight) {
+                    this.dirLight.shadow.mapSize.width = 2048;
+                    this.dirLight.shadow.mapSize.height = 2048;
+                    this.dirLight.castShadow = true;
+                }
+                break;
+
+            case 'Mid':
+                // Medium Quality: Reduced pixel ratio, medium shadow quality
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFShadowMap;
+                if (this.dirLight) {
+                    this.dirLight.shadow.mapSize.width = 1024;
+                    this.dirLight.shadow.mapSize.height = 1024;
+                    this.dirLight.castShadow = true;
+                }
+                break;
+
+            case 'Low':
+                // Low Quality: Minimum pixel ratio, no shadows for best performance
+                this.renderer.setPixelRatio(1);
+                this.renderer.shadowMap.enabled = false;
+                if (this.dirLight) {
+                    this.dirLight.castShadow = false;
+                }
+                break;
+
+            default:
+                // Default to High
+                this.applyGraphicsQuality('High');
+                return;
+        }
+
+        // Force shadow map update
+        if (this.dirLight?.shadow?.map) {
+            this.dirLight.shadow.map.dispose();
+            this.dirLight.shadow.map = null as any;
+        }
     }
 
     private onWindowResize() {

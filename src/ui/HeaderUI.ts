@@ -235,18 +235,18 @@ export class HeaderUI {
         navContainer.style.transform = 'translateY(-50%)';
         navContainer.style.display = 'flex';
         navContainer.style.flexDirection = 'column';
-        navContainer.style.gap = '1px';
+        navContainer.style.gap = '2px';
         navContainer.style.alignItems = 'center';
         navContainer.style.pointerEvents = 'auto';
 
         const buttons = [
-            { key: 'HOME', label: 'Home', icon: '/assets/home/home.png', size: 150 },
-            { key: 'HEROES', label: 'Heroes', icon: '/assets/home/heroes.png', size: 140 },
-            { key: 'SHARDS', label: 'Shards', icon: '/assets/item/shard-item/Tier 1/Ring of Life - shard.png', size: 140 },
-            { key: 'SUMMON', label: 'Summon', icon: '/assets/home/summon.png', size: 120 },
-            { key: 'FORGE', label: 'Forge', icon: '/assets/home/forge.png', size: 140 },
-            { key: 'BACKPACK', label: 'Backpack', icon: '/assets/home/backpack.png', size: 150 },
-            { key: 'SHOP', label: 'Shop', icon: '/assets/home/store.png', size: 160 },
+            { key: 'HOME', label: 'Home', icon: '/assets/home/home.png', size: 110 },
+            { key: 'HEROES', label: 'Heroes', icon: '/assets/home/heroes.png', size: 115 },
+            { key: 'SHARDS', label: 'Shards', icon: '/assets/item/shard-item/Tier 1/Ring of Life - shard.png', size: 110 },
+            { key: 'SUMMON', label: 'Summon', icon: '/assets/home/summon.png', size: 90 },
+            { key: 'FORGE', label: 'Forge', icon: '/assets/home/forge.png', size: 105 },
+            { key: 'BACKPACK', label: 'Backpack', icon: '/assets/home/backpack.png', size: 110 },
+            { key: 'SHOP', label: 'Shop', icon: '/assets/home/store.png', size: 115 },
         ];
         buttons.forEach(({ key, label, icon, size }) => {
             const btn = document.createElement('div');
@@ -272,7 +272,7 @@ export class HeaderUI {
             labelEl.style.fontWeight = '700';
             labelEl.style.fontSize = '1.4rem';
             labelEl.style.textShadow = '0px 2px 4px rgba(0,0,0,0.6)';
-            labelEl.style.marginTop = '-20px';
+            labelEl.style.marginTop = '-15px';
             btn.appendChild(labelEl);
 
             // Hover effect
