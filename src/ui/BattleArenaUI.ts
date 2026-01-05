@@ -1,5 +1,5 @@
 import { HERO_ASSETS, HeroSpriteConfig } from '../data/HeroAssetsMap';
-import { EnemyDefinition, getEnemyById, getEnemyStatsForLevel } from '../data/EnemyDefinitions';
+import { EnemyDefinition, EnemySprite, getEnemyById, getEnemyStatsForLevel, ENEMY_DEFINITIONS } from '../data/EnemyDefinitions';
 import { calculateLoot, LootReward } from '../data/LootSystem';
 
 const FPS = 24; // Balanced for smooth animations without lag
@@ -108,6 +108,12 @@ interface StatusEffect {
     icon: string;
 }
 
+interface BattleStats {
+    damageDealt: number;
+    healing: number;
+    damageTaken: number;
+}
+
 const MELEE_CLASSES = ['Assassin', 'Warrior', 'Paladin', 'Tank'];
 
 interface BattleEntity {
@@ -126,21 +132,22 @@ interface BattleEntity {
     skillIcons: string[];
     isMelee: boolean;
     // Battle stats tracking
-    battleStats: { damageDealt: number; healing: number; damageTaken: number; };
+    battleStats: BattleStats;
+    stars: number; // Added for CP calculation
+    enemySpriteConfig?: EnemySprite; // Added for Enemy-specific sprite handling
+    skills?: { name: string }[]; // Added for CP calculation
 }
 
 export class BattleArenaUI {
     private container: HTMLElement;
     private loadingScreen: HTMLElement | null = null;
     private arenaScreen: HTMLElement | null = null;
-    // private onClose: () => void; // Defined in constructor
-
-    private teamInfo: { name: string, level: number, instanceId: string, stars: number }[];
-    private enemyId: string;
-    private stageLevel: number;
-
     private heroes: BattleEntity[] = [];
     private enemies: BattleEntity[] = [];
+    // private onClose: () => void; // Defined in constructor
+    private heroTeam: { name: string, level: number, instanceId: string, stars: number, stats?: { hp: number; atk: number; def: number; speed: number; crit: string }, skills?: any[], moveSpeed?: number }[];
+    private enemyIds: string[];
+    private stageLevel: number;
 
     // Core Logic
     private battleSpeed = 2;
@@ -164,6 +171,10 @@ export class BattleArenaUI {
     private repeatBtn!: HTMLElement;
     private resultOverlay: HTMLElement | null = null;
 
+    // Damage Stats UI
+    private leftStatsPanel: HTMLElement | null = null;
+    private rightStatsPanel: HTMLElement | null = null;
+
     private static NAME_ALIASES: Record<string, string> = {
         'Oryx': 'Antelope Mage',
         'Sable': 'Antelope Ranger',
@@ -174,37 +185,56 @@ export class BattleArenaUI {
     };
 
     constructor(
-        teamInfo: { name: string, level: number, instanceId: string, stars: number }[],
+        heroTeam: { name: string, level: number, instanceId: string, stars: number, stats?: { hp: number; atk: number; def: number; speed: number; crit: string }, skills?: any[], moveSpeed?: number }[],
         private onClose: () => void,
-        private onComplete?: (result: { win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number }) => void,
-        enemyId: string = 'treant',
-        stageLevel: number = 10,
-        initialAutoState: boolean = false,
-        private mapId: number = 1,
-        private isFirstClear: boolean = false,
-        initialSpeed: number = 2 // New arg
+        private onBattleEnd: (result: { win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number, survivingHeroes: number }) => void,
+        enemyIds: string[], // Changed from single enemyId to list
+        stageLevel: number,
+        isAuto: boolean,
+        mapId: number,
+        isFirstClear: boolean,
+        initialSpeed: number = 2,
+        private onRoundComplete?: (result: { win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number, survivingHeroes: number }) => void
     ) {
-        this.teamInfo = teamInfo.map(h => ({
+        this.heroTeam = heroTeam.map(h => ({
             ...h,
             name: BattleArenaUI.NAME_ALIASES[h.name] || h.name
         }));
-        console.log('[BattleArenaUI] Constructor teamInfo:', this.teamInfo);
-        this.enemyId = enemyId;
+        console.log('[BattleArenaUI] Constructor heroTeam:', this.heroTeam);
+        this.enemyIds = enemyIds;
         this.stageLevel = stageLevel;
         this.onClose = onClose;
-        this.onComplete = onComplete;
-        this.isAuto = initialAutoState; // Set initial state
+        this.onBattleEnd = onBattleEnd;
+        this.isAuto = isAuto; // Set initial state
         this.battleSpeed = initialSpeed; // Set initial speed
+        this.mapId = mapId;
+        this.isFirstClear = isFirstClear;
+
         this.container = document.createElement('div');
-        this.container.style.cssText = `position: fixed; inset: 0; width: 100%; height: 100%; z-index: 100000; background: #000;`;
+        this.container.className = 'battle-arena-ui';
+        this.container.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 3000; overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            opacity: 0; transition: opacity 0.5s;
+        `;
+        document.body.appendChild(this.container);
         this.showLoadingScreen();
     }
+
+    private mapId: number;
+    private isFirstClear: boolean;
 
     private showLoadingScreen() {
         this.loadingScreen = document.createElement('div');
         this.loadingScreen.style.cssText = `position: absolute; inset: 0; background: #0a0a1a; display: flex; justify-content: center; align-items: center; z-index: 10;`;
         this.loadingScreen.innerHTML = `<div style="color:#fbbf24; font-size: 2rem; font-family: 'SF Pro Display';">LOADING BATTLE...</div>`;
         this.container.appendChild(this.loadingScreen);
+
+        // Show container immediately for loading screen
+        requestAnimationFrame(() => {
+            this.container.style.opacity = '1';
+        });
 
         setTimeout(() => {
             if (this.loadingScreen) {
@@ -234,7 +264,7 @@ export class BattleArenaUI {
             };
 
             // Preload all heroes
-            this.teamInfo.forEach(heroInfo => {
+            this.heroTeam.forEach(heroInfo => {
                 const name = heroInfo.name;
                 const configLeft = HERO_ASSETS.find(h => h.name === `${name} Left`);
                 if (configLeft?.sprite2D) {
@@ -246,7 +276,7 @@ export class BattleArenaUI {
                         heroData.skillIcons.forEach((icon: string) => {
                             // Correct path logic: Extract hero folder from spritePath
                             // Structure: .../heroes/HERO_FOLDER/VIEW/file.png
-                            // Skills:    .../heroes/HERO_FOLDER/skills/icon.png
+                            // Skills:    .../heroes/HERO_FOLDER/VIEW/skills/icon.png
                             const parts = spritePath.split('/');
                             const viewIndex = parts.findIndex(p => p === 'side-left' || p === 'side-right' || p === 'iso-right');
                             if (viewIndex > 0) {
@@ -262,16 +292,19 @@ export class BattleArenaUI {
             });
 
             // Preload Enemy Assets
-            const enemyDef = getEnemyById(this.enemyId);
-            if (enemyDef) {
-                if (enemyDef.icon) assetsToLoad.push(enemyDef.icon);
-                if (enemyDef.sprite && enemyDef.sprite.animations) {
-                    Object.entries(enemyDef.sprite.animations).forEach(([key, anim]) => {
-                        if (key === 'showidle' || key === 'win') return; // Loop dizzy for enemies too? Yes.
-                        if (anim.file) assetsToLoad.push(`${enemyDef.sprite.basePath}${anim.file}`);
-                    });
+            this.enemyIds.forEach(enemyId => {
+                const enemyDef = getEnemyById(enemyId);
+                if (enemyDef) {
+                    if (enemyDef.icon) assetsToLoad.push(enemyDef.icon);
+                    if (enemyDef.sprite && enemyDef.sprite.animations) {
+                        Object.entries(enemyDef.sprite.animations).forEach(([key, anim]) => {
+                            if (key === 'showidle' || key === 'win') return; // Loop dizzy for enemies too? Yes.
+                            if (anim.file) assetsToLoad.push(`${enemyDef.sprite.basePath}${anim.file}`);
+                        });
+                    }
                 }
-            }
+            });
+
 
             // Preload Mock Enemies (Heroes used as enemies)
             const MOCK_ENEMIES = ['Antelope Mage', 'Antelope Ranger', 'Razor'];
@@ -317,102 +350,134 @@ export class BattleArenaUI {
     }
 
     private showArena() {
-        if (this.arenaScreen) return;
-        if (this.loadingScreen) { this.loadingScreen.remove(); this.loadingScreen = null; }
+        console.log('[BattleArenaUI] showArena called');
+        try {
+            if (this.arenaScreen) return;
+            if (this.loadingScreen) { this.loadingScreen.remove(); this.loadingScreen = null; }
+            this.container.style.opacity = '1';
 
-        this.arenaScreen = document.createElement('div');
-        this.arenaScreen.style.cssText = `position: absolute; inset: 0; background: url('/assets/Background/arena2.png') center/cover;`;
-        this.arenaScreen.appendChild(Object.assign(document.createElement('div'), { style: `position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4);` }));
+            this.arenaScreen = document.createElement('div');
+            this.arenaScreen.style.cssText = `position: absolute; inset: 0; background: url('/assets/Background/arena2.png') center/cover;`;
+            this.arenaScreen.appendChild(Object.assign(document.createElement('div'), { style: `position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4);` }));
+            this.container.appendChild(this.arenaScreen);
 
-        const battleContainer = document.createElement('div');
-        battleContainer.style.cssText = `position: relative; width: 100%; height: 100%; z-index: 1;`;
-        battleContainer.onclick = (e) => {
-            if (this.activeTooltip && !(e.target as HTMLElement).closest('.hud-btn')) {
-                this.activeTooltip.remove(); this.activeTooltip = null;
+            const battleContainer = document.createElement('div');
+            battleContainer.style.cssText = `position: relative; width: 100%; height: 100%; z-index: 1;`;
+            battleContainer.onclick = (e) => {
+                if (this.activeTooltip && !(e.target as HTMLElement).closest('.hud-btn')) {
+                    this.activeTooltip.remove(); this.activeTooltip = null;
+                }
+            };
+            this.arenaScreen.appendChild(battleContainer); // Make sure to append it!
+
+            // Create Heroes
+            this.heroes = [];
+            console.log('[BattleArenaUI] Starting Hero Spawn');
+            this.heroTeam.forEach((heroInfo, index) => {
+                const name = heroInfo.name;
+                console.log(`[BattleArenaUI] Attempting to spawn hero: "${name}"`);
+
+                // HEROES (Left Side) -> Use side-left sprites (facing right toward enemies)
+                const heroConfig = HERO_ASSETS.find(h => h.name === name);
+
+                if (!heroConfig) console.warn(`[BattleArenaUI] Config not found for "${name}"`);
+                if (heroConfig?.sprite2D) {
+                    // Use actual level from heroInfo
+                    const levelStr = String(heroInfo.level);
+                    const stars = heroInfo.stars || 1;
+                    // Use stats from heroInfo if provided
+                    const hero = this.createBattleEntity('hero', name, levelStr, '#22c55e', heroConfig.sprite2D, stars, heroInfo.stats, heroInfo.skills);
+
+                    // Positioning will be handled after loop or inside via setIsometricPosition
+                    // We will defer positioning until all are created or do it here.
+                    // Refactor to use setIsometricPosition logic below.
+
+                    battleContainer.appendChild(hero.element);
+                    this.playAnim(hero, 'idle');
+                    this.heroes.push(hero);
+                }
+            });
+
+            // 2. Create Enemies (Use real IDs passed from constructor)
+            this.enemies = [];
+            this.enemyIds.forEach((enemyId, i) => {
+                const def = ENEMY_DEFINITIONS.find(e => e.id === enemyId);
+                if (def) {
+                    // Determine Stars based on type
+                    const stars = def.type === 'boss' ? 5 : (def.type === 'elite' ? 3 : 1);
+
+                    // Map Enemy Sprite to HeroSpriteConfig-like structure for createBattleEntity
+                    // We'll handle the differences in playAnim
+                    const spriteConfig: HeroSpriteConfig = {
+                        spritesheetPath: def.sprite.basePath + def.sprite.animations.idle.file,
+                        frameWidth: def.sprite.frameSize,
+                        frameHeight: def.sprite.frameSize,
+                        framesPerRow: def.sprite.animations.idle.framesPerRow,
+                        totalFrames: def.sprite.animations.idle.frames,
+                        fps: 24
+                    };
+
+                    const enemy = this.createBattleEntity(
+                        'enemy',
+                        def.displayName,
+                        String(this.stageLevel),
+                        '#ef4444',
+                        spriteConfig,
+                        stars
+                    );
+
+                    // Attach specific enemy sprite config for animations
+                    enemy.enemySpriteConfig = { ...def.sprite, icon: def.icon };
+
+                    // Override Stats from EnemyDefinition
+                    const stats = getEnemyStatsForLevel(def, this.stageLevel);
+                    enemy.maxHp = stats.hp;
+                    enemy.hp = stats.hp;
+                    enemy.stats.atk = stats.atk;
+                    enemy.stats.def = stats.def;
+                    enemy.stats.speed = stats.speed;
+                    enemy.stats.crit = stats.crit;
+                    enemy.battleStats.damageDealt = 0; // Reset
+                    // Note: AP/Crit/Speed logic might need refinement if using def.baseStats fully
+
+                    // Positioning
+                    // If 1 enemy, put in middle (Slot 2 or 5)
+                    // If 2 enemies, slots 1, 2
+                    // If 3 enemies, slots 1, 2, 3
+                    // Reuse existing slot logic for now, simply 0, 1, 2...
+                    const slotIndex = i; // 0, 1, 2
+                    this.setIsometricPosition(enemy.element, slotIndex, false);
+
+                    this.enemies.push(enemy);
+                    this.arenaScreen?.appendChild(enemy.element);
+                    this.playAnim(enemy, 'idle');
+                }
+            });
+
+            // Isometric Position: Player Side update
+            this.heroes.forEach((h, i) => {
+                this.setIsometricPosition(h.element, i, true);
+            });
+
+            if (this.heroes.length > 0) {
+                // Fix: Attach HUD to root container to ensure it's on top of everything
+                this.createHUD(this.container);
+
+                this.lastTick = performance.now();
+                this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
             }
-        };
 
-        // Create Heroes
-        this.heroes = [];
-        this.teamInfo.forEach((heroInfo, index) => {
-            const name = heroInfo.name;
-            console.log(`[BattleArenaUI] Attempting to spawn hero: "${name}"`);
-
-            // HEROES (Left Side) -> Use side-left sprites (facing right toward enemies)
-            const heroConfig = HERO_ASSETS.find(h => h.name === name);
-
-            if (!heroConfig) console.warn(`[BattleArenaUI] Config not found for "${name}"`);
-            if (heroConfig?.sprite2D) {
-                // Use actual level from heroInfo
-                const levelStr = String(heroInfo.level);
-                const hero = this.createBattleEntity('hero', name, levelStr, '#22c55e', heroConfig.sprite2D);
-
-                // Positioning will be handled after loop or inside via setIsometricPosition
-                // We will defer positioning until all are created or do it here.
-                // Refactor to use setIsometricPosition logic below.
-
-                battleContainer.appendChild(hero.element);
-                this.playAnim(hero, 'idle');
-                this.heroes.push(hero);
-            }
-        });
-
-        // SEE MULTI-REPLACE CHUNK 2 for Enemy Logic insertion here
+            this.arenaScreen.appendChild(battleContainer);
 
 
-        // Create Enemies (Mock 6-hero team)
-        this.enemies = [];
-        // Use asset names for the enemy team (matching HeroAssetsMap entries)
-        const mockEnemyNames = ['Antelope Mage', 'Antelope Ranger', 'Razor', 'Antelope Mage', 'Antelope Ranger', 'Razor'];
+            // Exit button moved to HUD
 
-        mockEnemyNames.forEach((name, index) => {
-            // ENEMIES (Right Side) -> Use "...Left" asset which now has side-right sprites (facing left toward heroes)
-            const heroConfig = HERO_ASSETS.find(h => h.name === `${name} Left`);
 
-            if (heroConfig?.sprite2D) {
-                // Enemies at same level as stage for now, or scaled
-                const levelStr = String(this.stageLevel);
-                const enemy = this.createBattleEntity('enemy', name, levelStr, '#ef4444', heroConfig.sprite2D);
-
-                // Isometric Position: Right Side
-                const isPlayer = false;
-                this.setIsometricPosition(enemy.element, index, isPlayer);
-
-                battleContainer.appendChild(enemy.element);
-                // Enemy animation mapping: idle is 'idle'
-                this.playAnim(enemy, 'idle');
-
-                // NO SCALE FLIP for enemies (Using native Left asset)
-
-                this.enemies.push(enemy);
-            }
-        });
-
-        // Isometric Position: Player Side update
-        this.heroes.forEach((h, i) => {
-            this.setIsometricPosition(h.element, i, true);
-        });
-
-        if (this.heroes.length > 0) {
-            this.createHUD(battleContainer);
-
-            this.lastTick = performance.now();
-            this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
-        }
-
-        this.arenaScreen.appendChild(battleContainer);
-
-        const exitBtn = document.createElement('button');
-        exitBtn.innerText = '✕';
-        exitBtn.style.cssText = `position: absolute; top: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: #fff; font-size: 1.5rem; cursor: pointer; z-index: 100; transition: all 0.2s;`;
-        exitBtn.onclick = () => this.showAbandonConfirmation();
-        this.arenaScreen.appendChild(exitBtn);
-
-        this.arenaScreen.appendChild(document.createElement('style')).textContent = `
+            this.arenaScreen.appendChild(document.createElement('style')).textContent = `
             @keyframes floatUpFade { 0% { transform: translate3d(0,0,0); opacity: 0; } 20% { transform: translate3d(0,-20px,0); opacity: 1; } 100% { transform: translate3d(0,-60px,0); opacity: 0; } }
             @keyframes fadeInUp { from { opacity: 0; transform: translate3d(0,10px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
             @keyframes modalFadeIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-            .floating-damage { position: absolute; font-family: 'SF Pro Display'; font-weight: 900; color: #fff; text-shadow: 0 0 5px #000; animation: floatUpFade 1s forwards cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 1000; font-size: 2rem; will-change: transform, opacity; }
+            .floating-damage { position: absolute; font-family: 'SF Pro Display'; font-weight: 900; color: #fff; text-shadow: 0 0 5px #000; animation: floatUpFade 1s forwards cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 1000; font-size: 2rem; will-change: transform, opacity; pointer-events: none; }
             .hud-btn { transition: transform 0.1s; cursor: pointer; }
             .hud-btn:active { transform: scale(0.95); }
             .skill-tooltip { position: absolute; bottom: 130px; right: 0; width: 320px; background: rgba(16, 16, 24, 0.95); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 20px; color: #fff; font-family: 'SF Pro Display'; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.5); backdrop-filter: blur(10px); animation: fadeIn 0.1s; }
@@ -436,8 +501,176 @@ export class BattleArenaUI {
             .data-btn { position: absolute; top: 30px; left: 30px; width: 50px; height: 50px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 2px solid #8b6914; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 100; transition: all 0.2s; }
             .data-btn:hover { background: rgba(139, 105, 20, 0.5); transform: scale(1.1); }
         `;
-        this.container.appendChild(this.arenaScreen);
+            // this.container.appendChild(this.arenaScreen); // Already appended at start
+            this.createDamageStatsOverlay(this.arenaScreen);
+            console.log('[BattleArenaUI] showArena completed successfully');
+        } catch (e) {
+            console.error('[BattleArenaUI] CRITICAL ERROR IN SHOWARENA:', e);
+            alert('Error showing battle arena: ' + e);
+        }
     }
+
+    private createDamageStatsOverlay(parent: HTMLElement) {
+        // Left Panel (Player)
+        this.leftStatsPanel = document.createElement('div');
+        this.leftStatsPanel.style.cssText = `
+            position: absolute; top: 100px; left: 20px; bottom: 120px; width: 280px;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none; z-index: 50;
+        `;
+
+        // Header with Total CP
+        const leftHeader = document.createElement('div');
+        const leftCP = this.calculateTeamCP(this.heroes);
+        leftHeader.style.cssText = `
+            background: rgba(0,0,0,0.8); color: #fbbf24; border: 1px solid #fbbf24;
+            padding: 8px; border-radius: 8px; text-align: center; font-weight: bold;
+            font-family: 'SF Pro Display'; 2box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+            display: flex; justify-content: space-between; align-items: center;
+        `;
+        leftHeader.innerHTML = `<span>HEROES CP</span> <span style="font-size: 1.2rem;">${this.formatNumber(leftCP)}</span>`;
+        this.leftStatsPanel.appendChild(leftHeader);
+
+        parent.appendChild(this.leftStatsPanel);
+
+        // Right Panel (Enemy)
+        this.rightStatsPanel = document.createElement('div');
+        this.rightStatsPanel.style.cssText = `
+            position: absolute; top: 100px; right: 20px; bottom: 120px; width: 280px;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none; z-index: 50;
+        `;
+
+        // Header with Total CP
+        const rightHeader = document.createElement('div');
+        const rightCP = this.calculateTeamCP(this.enemies);
+        rightHeader.style.cssText = `
+            background: rgba(0,0,0,0.8); color: #f87171; border: 1px solid #f87171;
+            padding: 8px; border-radius: 8px; text-align: center; font-weight: bold;
+            font-family: 'SF Pro Display'; box-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
+            display: flex; justify-content: space-between; align-items: center;
+        `;
+        rightHeader.innerHTML = `<span>ENEMIES CP</span> <span style="font-size: 1.2rem;">${this.formatNumber(rightCP)}</span>`;
+        this.rightStatsPanel.appendChild(rightHeader);
+
+        parent.appendChild(this.rightStatsPanel);
+    }
+
+    private createStatCard(entity: BattleEntity, side: 'left' | 'right'): HTMLElement {
+        const card = document.createElement('div');
+        card.className = `stat-card-${entity.id}-${side}`; // Unique class for updates
+        card.style.cssText = `
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(0, 0, 0, 0.6); padding: 8px; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px);
+            font-family: 'SF Pro Display'; color: #fff;
+            transition: all 0.2s;
+        `;
+
+        // Portrait
+        const size = 50;
+        const portrait = document.createElement('div');
+        portrait.style.cssText = `
+            width: ${size}px; height: ${size}px; border-radius: 6px;
+            background: #333; overflow: hidden; border: 2px solid ${side === 'left' ? '#22c55e' : '#ef4444'};
+            flex-shrink: 0;
+        `;
+
+        // Logic to extract portrait path (copied/adapted from HeroList.ts)
+        let portraitPath = '';
+        if (entity.enemySpriteConfig) {
+            portraitPath = entity.enemySpriteConfig.icon || '';
+        } else if (entity.baseConfig && entity.baseConfig.spritesheetPath) {
+            const path = entity.baseConfig.spritesheetPath;
+            const heroFolderMatch = path.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+            if (heroFolderMatch) {
+                const folder = heroFolderMatch[1];
+                const pName = folder.replace('_with_animation_spritesheets', '').replace(/_/g, ' ');
+                portraitPath = `/assets/Character/heroes/${folder}/portrait/${pName}.jpg`;
+            }
+        }
+
+        if (portraitPath) {
+            portrait.style.backgroundImage = `url('${portraitPath}')`;
+            portrait.style.backgroundSize = 'cover';
+        } else {
+            portrait.innerText = '?';
+            portrait.style.display = 'flex';
+            portrait.style.justifyContent = 'center';
+            portrait.style.alignItems = 'center';
+        }
+
+        if (side === 'right') {
+            // For enemies, maybe mirror? No, standard is fine.
+        }
+
+        const info = document.createElement('div');
+        info.style.cssText = `flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden;`;
+
+        const nameRow = document.createElement('div');
+        nameRow.style.cssText = `display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: bold;`;
+        nameRow.innerHTML = `<span>${entity.name}</span> <span class="dmg-val">0</span>`;
+        info.appendChild(nameRow);
+
+        // Damage Bar container
+        const barTrack = document.createElement('div');
+        barTrack.style.cssText = `width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;`;
+        const barFill = document.createElement('div');
+        barFill.className = 'dmg-bar-fill';
+        barFill.style.cssText = `width: 0%; height: 100%; background: ${side === 'left' ? '#fbbf24' : '#f87171'}; transition: width 0.3s;`;
+        barTrack.appendChild(barFill);
+        info.appendChild(barTrack);
+
+        card.appendChild(portrait);
+        card.appendChild(info);
+
+        return card;
+    }
+
+    private updateStatsOverlay() {
+        if (!this.leftStatsPanel || !this.rightStatsPanel) return;
+
+        // Calculate max damage for scaling
+        let maxDmg = 1;
+        [...this.heroes, ...this.enemies].forEach(e => maxDmg = Math.max(maxDmg, e.battleStats.damageDealt));
+
+        const updateSide = (panel: HTMLElement, entities: BattleEntity[], side: 'left' | 'right') => {
+            // Sort by damage desc (optional, or keeping slot order? User asked for "column", let's keep slot order for stability or damage for leaderboard feel? Reference image implies slot order usually, but damage meters usually sort. Let's Sort by Damage for utility.)
+            // START SIMPLE: Slot order (stable) matches field.
+
+            // Re-render or Update?
+            // Fully re-rendering every frame is heavy. Let's update if exists, append if not.
+            entities.forEach((entity, index) => {
+                let card = panel.children[index + 1] as HTMLElement; // +1 to skip header
+                if (!card) {
+                    card = this.createStatCard(entity, side);
+                    panel.appendChild(card);
+                }
+
+                // Update Values
+                const valEl = card.querySelector('.dmg-val') as HTMLElement;
+                const barEl = card.querySelector('.dmg-bar-fill') as HTMLElement;
+
+                if (valEl) valEl.innerText = this.formatNumber(entity.battleStats.damageDealt);
+                if (barEl) {
+                    const pct = (entity.battleStats.damageDealt / maxDmg) * 100;
+                    barEl.style.width = `${pct}%`;
+                }
+
+                // Grey out if dead
+                if (entity.isDead) card.style.opacity = '0.5';
+                else card.style.opacity = '1';
+            });
+        };
+
+        updateSide(this.leftStatsPanel, this.heroes, 'left');
+        updateSide(this.rightStatsPanel, this.enemies, 'right');
+    }
+
+    private formatNumber(num: number): string {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    }
+
 
     private gameLoop(timestamp: number) {
         // Always request next frame at the end, so we guard logic not function
@@ -482,6 +715,9 @@ export class BattleArenaUI {
                 }
             }
         }
+
+        // Update Stats Overlay every frame (throttled/efficiently)
+        this.updateStatsOverlay();
     }
 
     private tickEntity(entity: BattleEntity, baseTick: number) {
@@ -494,7 +730,6 @@ export class BattleArenaUI {
         // Simpler: Just do small ticks or stick to turn-based duration?
         // The duration is in turns. We can tick damage at end of turn (in updateEffects) or continuously?
         // Current architecture uses turns for duration. Real-time is okay too.
-        // Let's rely on updateEffects for turn-based expiration, but visuals here?
         // Actually, let's keep it simple: DoT damage happens in tickEntity periodically
         if (Math.random() < 0.05) { // Occasional tick
             const dots = entity.effects.filter(e => e.type === 'dot');
@@ -606,7 +841,7 @@ export class BattleArenaUI {
         }
         else if (!isSilenced && actor.cooldowns.skill2 === 0 && Math.random() > 0.4) {
             // SKILL 2
-            animType = 'skill2'; actor.cooldowns.skill2 = 4;
+            animType = 'skill1'; actor.cooldowns.skill2 = 4;
             skillName = skills[1]?.name || 'Skill 2';
 
             if (actor.heroId === 'oryx_mage') {
@@ -883,29 +1118,82 @@ export class BattleArenaUI {
         });
     }
 
-    private playAnim(entity: BattleEntity, type: string, loop: boolean = true, onComplete?: () => void) {
-        if (entity.isDead && type !== 'dead') return;
-
-        // Check if this is an enemy entity with enemyDef
+    private playAnim(entity: BattleEntity, animName: string, loop: boolean = true, onComplete?: () => void) {
+        if (entity.isDead && animName !== 'dead') return;
 
         if (entity.animReqId) { cancelAnimationFrame(entity.animReqId); entity.animReqId = null; }
 
-        const newPath = entity.baseConfig.spritesheetPath.replace('idle', type);
+        let animFile = '';
+        let totalFrames = 0;
+        let framesPerRow = 0;
+        let spriteSize = 400; // Default for heroes
+        let mappedAnimName = animName; // Use this for comparison
+
+        if (entity.enemySpriteConfig) {
+            // ENEMY ANIMATION MAPPING
+            mappedAnimName = ENEMY_ANIM_MAP[animName] || 'idle';
+            // @ts-ignore - dynamic access
+            const config = entity.enemySpriteConfig.animations[mappedAnimName];
+            if (config) {
+                animFile = entity.enemySpriteConfig.basePath + config.file;
+                totalFrames = config.frames;
+                framesPerRow = config.framesPerRow;
+                spriteSize = entity.enemySpriteConfig.frameSize;
+            } else {
+                // Fallback to idle
+                const idle = entity.enemySpriteConfig.animations.idle;
+                animFile = entity.enemySpriteConfig.basePath + idle.file;
+                totalFrames = idle.frames;
+                framesPerRow = idle.framesPerRow;
+                spriteSize = entity.enemySpriteConfig.frameSize;
+                mappedAnimName = 'idle';
+            }
+        } else {
+            // HERO ANIMATION MAPPING
+            // ... (Existing logic)
+            animFile = entity.baseConfig.spritesheetPath.replace('idle', animName); // Default
+
+            // Priority: 1. Specific overwrite in baseConfig, 2. Global constant, 3. Total frames
+            if (entity.baseConfig.animations && entity.baseConfig.animations[animName]) {
+                totalFrames = entity.baseConfig.animations[animName].frames;
+            } else {
+                totalFrames = ANIM_FRAMES[animName] || entity.baseConfig.totalFrames;
+            }
+
+            framesPerRow = entity.baseConfig.framesPerRow;
+            spriteSize = entity.baseConfig.frameWidth;
+            mappedAnimName = animName;
+        }
+
+        const newPath = animFile;
 
         // Preload the new sprite to prevent blinking
         const preloadAndPlay = () => {
-            entity.currentAnim = type;
+            entity.currentAnim = mappedAnimName;
             entity.spriteEl.style.backgroundImage = `url('${newPath}')`;
             entity.spriteEl.style.backgroundPosition = '0 0';
-            entity.currentAnimTotalFrames = ANIM_FRAMES[type] || 24;
+            entity.currentAnimTotalFrames = totalFrames;
             entity.loopAnim = loop;
             entity.onAnimComplete = onComplete;
             entity.animFrame = 0;
-            this.runAnimationLoop(entity, type, loop);
+
+            // Update sizing if frame size differs (Enemies might)
+            if (entity.enemySpriteConfig) {
+                entity.spriteEl.style.width = `${spriteSize}px`;
+                entity.spriteEl.style.height = `${spriteSize}px`;
+                entity.spriteEl.style.backgroundSize = `${framesPerRow * spriteSize}px auto`;
+            } else {
+                // Hero default 512
+                entity.spriteEl.style.width = `${spriteSize}px`;
+                entity.spriteEl.style.height = `${spriteSize}px`;
+                entity.spriteEl.style.backgroundSize = `${framesPerRow * spriteSize}px auto`;
+            }
+
+            this.runAnimationLoop(entity, animName, loop);
         };
 
-        // Check if already using this animation
-        if (entity.currentAnim === type) {
+        // Check if already using this animation (check against mapped name for enemies)
+        if (entity.currentAnim === mappedAnimName) {
             preloadAndPlay();
             return;
         }
@@ -918,14 +1206,21 @@ export class BattleArenaUI {
 
         // Fallback: if image takes too long, just play anyway
         setTimeout(() => {
-            if (entity.currentAnim !== type) {
+            if (entity.currentAnim !== mappedAnimName) {
                 preloadAndPlay();
             }
         }, 50);
     }
 
     private runAnimationLoop(entity: BattleEntity, type: string, loop: boolean) {
-        const spriteSize = 400;
+        // Determine correct sprite size based on entity config
+        let spriteSize = 400; // Default fallback
+        if (entity.enemySpriteConfig) {
+            spriteSize = entity.enemySpriteConfig.frameSize;
+        } else if (entity.baseConfig) {
+            spriteSize = entity.baseConfig.frameWidth;
+        }
+
         const isIdle = type === 'idle';
 
         // For idle: Use sine-wave breathing loop (smooth 0→1→0)
@@ -1037,7 +1332,7 @@ export class BattleArenaUI {
         h.style.cssText = `
             position: absolute; bottom: 40px; right: 40px; 
             display: flex; gap: 15px; align-items: center; 
-            z-index: 50; 
+            z-index: 10000; 
             background: rgba(0,0,0,0.5); padding: 15px; 
             border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); 
             backdrop-filter: blur(5px);
@@ -1054,6 +1349,9 @@ export class BattleArenaUI {
 
         // Repeat Button
         this.createRepeatButton(h);
+
+        // Exit Button
+        this.createExitButton(h);
 
         c.appendChild(h);
         this.updateHUD();
@@ -1096,6 +1394,32 @@ export class BattleArenaUI {
                 this.repeatBtn.style.borderColor = '#fff';
             }
         }
+    }
+
+    private createExitButton(c: HTMLElement) {
+        const btn = document.createElement('div');
+        btn.className = 'hud-btn';
+        btn.style.cssText = `
+            width: 60px; height: 60px; border-radius: 50%; 
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
+            cursor: pointer; transition: all 0.2s;
+        `;
+
+        const icon = document.createElement('div');
+        icon.innerText = '✕';
+        icon.style.fontSize = '1.5rem';
+        icon.style.lineHeight = '1';
+        btn.appendChild(icon);
+
+        const text = document.createElement('div');
+        text.innerText = 'EXIT';
+        text.style.marginTop = '2px';
+        btn.appendChild(text);
+
+        btn.onclick = () => this.showAbandonConfirmation();
+        c.appendChild(btn);
     }
 
     private createStartButton(c: HTMLElement) {
@@ -1212,14 +1536,25 @@ export class BattleArenaUI {
     private toggleSpeed() { this.battleSpeed = this.battleSpeed === 2 ? 3 : 2; if (this.speedBtn) this.speedBtn.innerText = `${this.battleSpeed}x`; }
     private updateHUD() { if (this.heroes.length === 0) return; const hero = this.heroes[0]; const u = (i: number, v: number) => { if (this.skillBtns[i]) { const o = this.skillBtns[i].querySelector('.cd-overlay') as HTMLElement; const w = this.skillBtns[i]; if (v > 0) { o.style.opacity = '1'; o.innerText = v.toString(); w.style.filter = 'grayscale(1)'; } else { o.style.opacity = '0'; w.style.filter = 'none'; } } }; u(0, hero.cooldowns.skill1); u(1, hero.cooldowns.skill2); u(2, hero.cooldowns.skill3); u(3, hero.cooldowns.ult); }
 
-    private createBattleEntity(id: string, assetName: string, level: string, _color: string, spriteConfig: HeroSpriteConfig): BattleEntity {
-        const heroId = ASSET_TO_HERO_ID[assetName] || 'oryx_mage';
-        const data = HERO_DATA[heroId];
-        const name = data.name;
+    private createBattleEntity(id: string, assetName: string, level: string, _color: string, spriteConfig: HeroSpriteConfig, stars: number = 1, providedStats?: { hp: number; atk: number; def: number; speed: number; crit: string }, providedSkills?: any[]): BattleEntity {
+        let name = assetName;
+        let data: any = { type: 'Strength', class: 'Warrior', skillIcons: [] };
+        let heroId = 'oryx_mage';
+
+        if (id === 'hero') {
+            heroId = ASSET_TO_HERO_ID[assetName] || 'oryx_mage';
+            data = HERO_DATA[heroId];
+            name = data.name;
+        }
+
         const isMelee = MELEE_CLASSES.includes(data.class);
 
         const container = document.createElement('div'); container.style.cssText = `display: flex; flex-direction: column; align-items: center; position: relative; z-index: 10;`;
-        const overheadUI = document.createElement('div'); overheadUI.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: -110px; z-index: 20; pointer-events: none; padding-bottom: 20px;`;
+        const overheadUI = document.createElement('div');
+        overheadUI.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: -150px; z-index: 20; pointer-events: none; padding-bottom: 20px;`;
+        if (id === 'enemy') {
+            overheadUI.style.marginRight = '130px'; // Shift left relative to center
+        }
 
         const levelText = document.createElement('div'); levelText.innerText = level;
         levelText.style.cssText = `color: #fff; font-size: 1.2rem; font-weight: 900; line-height: 1; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; font-family: 'SF Pro Display';`;
@@ -1267,7 +1602,15 @@ export class BattleArenaUI {
         const shadow = document.createElement('div'); shadow.style.cssText = `width: 200px; height: 20px; background: rgba(0,0,0,0.4); border-radius: 50%; margin-top: -120px; z-index: -1;`;
         container.appendChild(shadow);
 
-        const stats = getStatsForLevel(heroId, parseInt(level));
+        let stats = { hp: 1000, atk: 100, def: 50, speed: 1.0, crit: '5%' }; // Default
+        if (id === 'hero') {
+            // Prefer provided stats (from AdventureModal calculation) over local lookup
+            if (providedStats) {
+                stats = providedStats;
+            } else {
+                stats = getStatsForLevel(heroId, parseInt(level));
+            }
+        }
 
         return {
             id, name, maxHp: stats.hp, hp: stats.hp, level: parseInt(level),
@@ -1275,8 +1618,10 @@ export class BattleArenaUI {
             isDead: false, cooldowns: { skill1: 0, skill2: 0, skill3: 0, ult: 0 },
             currentAnim: 'idle', animFrame: 0, animTimestamp: 0, animReqId: null,
             currentAnimTotalFrames: ANIM_FRAMES.idle, loopAnim: true,
-            skillIcons: data.skillIcons, stats: stats, ap: 0, effects: [], passiveCharges: 0, heroId, isMelee,
-            battleStats: { damageDealt: 0, healing: 0, damageTaken: 0 }
+            skillIcons: data.skillIcons || [], stats: stats, ap: 0, effects: [], passiveCharges: 0, heroId, isMelee,
+            battleStats: { damageDealt: 0, healing: 0, damageTaken: 0 },
+            stars: stars,
+            skills: providedSkills || data.skills
         };
     }
 
@@ -1439,6 +1784,48 @@ export class BattleArenaUI {
         }, 1000);
     }
 
+    private calculateTeamCP(entities: BattleEntity[]): number {
+        return entities.reduce((total, entity) => {
+            // Reconstruct stats object for CP calc
+            const stats = {
+                hp: entity.maxHp,
+                atk: entity.stats.atk,
+                armor: entity.stats.def, // Map def to armor
+                moveSpeed: 1, // Base move speed assumption if not available
+                aspd: entity.stats.speed, // Map speed to aspd
+            };
+
+            const isPlayer = entity.id === 'hero';
+
+            // CP Formula weights matching HeroUpgradeModal / UIManager.calculateSingleHeroCP
+            const hpPower = stats.hp * 0.1;
+            const atkPower = stats.atk * 5;
+            const armorPower = stats.armor * 10;
+            const aspdPower = stats.aspd * 1000;
+            const speedPower = stats.moveSpeed * 2;
+
+            // Level Bonus
+            const levelPower = entity.level * (isPlayer ? 500 : 20); // Heroes get 500 per level weight, enemies 20
+
+            let skillPower = 0;
+            if (isPlayer && entity.skills) {
+                // Full skill rank iteration matching UIManager.calculateSingleHeroCP
+                entity.skills.forEach((skill: any) => {
+                    if (skill.ranks && Array.isArray(skill.ranks)) {
+                        skill.ranks.forEach((rank: any, index: number) => {
+                            if (rank.unlockLevel <= entity.level) {
+                                skillPower += (index + 1) * 5000;
+                                if (rank.damagePercent) skillPower += rank.damagePercent * 50;
+                            }
+                        });
+                    }
+                });
+            }
+
+            return total + Math.round(hpPower + atkPower + armorPower + aspdPower + speedPower + levelPower + skillPower);
+        }, 0);
+    }
+
     private createBattleResultOverlay(win: boolean) {
         const overlay = document.createElement('div');
         overlay.style.cssText = `
@@ -1455,10 +1842,39 @@ export class BattleArenaUI {
             color: ${win ? '#fbbf24' : '#ef4444'}; 
             font-family: 'SF Pro Display'; 
             text-shadow: 0 0 20px ${win ? 'rgba(251, 191, 36, 0.5)' : 'rgba(239, 68, 68, 0.5)'};
-            margin-bottom: 30px; letter-spacing: 2px;
-            transform: scale(0.5); opacity: 0;
-            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            margin-bottom: 20px; animation: fadeInUp 0.5s;
         `;
+
+        // Star Rating Display (Only on Win)
+        let starContainer: HTMLElement | null = null;
+        if (win) {
+            starContainer = document.createElement('div');
+            starContainer.style.cssText = `display: flex; gap: 10px; margin-bottom: 30px; animation: fadeInUp 0.5s 0.2s backwards;`;
+
+            const survivors = this.heroes.filter(h => !h.isDead).length;
+            const dead = this.heroes.length - survivors;
+            let stars = 1;
+            if (dead === 0) stars = 3;
+            else if (dead === 1) stars = 2;
+
+            for (let i = 0; i < 3; i++) {
+                const star = document.createElement('div');
+                const isEarned = i < stars;
+                star.innerHTML = '★';
+                star.style.cssText = `
+                    font-size: 3rem; 
+                    color: ${isEarned ? '#ffd700' : '#444'}; 
+                    text-shadow: ${isEarned ? '0 0 10px rgba(255, 215, 0, 0.8)' : 'none'};
+                    transform: scale(${isEarned ? 1 : 0.8});
+                    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                `;
+                // Animate stars sequentially
+                if (isEarned) {
+                    star.style.animation = `popIn 0.4s ${0.3 + i * 0.1}s backwards`;
+                }
+                starContainer.appendChild(star);
+            }
+        }
 
         const rewardsContainer = document.createElement('div');
         rewardsContainer.style.cssText = `display: flex; gap: 20px; align-items: center; justify-content: center; margin-bottom: 40px; min-height: 80px; opacity: 0;`;
@@ -1509,17 +1925,20 @@ export class BattleArenaUI {
 
         btnContainer.appendChild(btn);
         overlay.appendChild(title);
+        if (starContainer) overlay.appendChild(starContainer);
         overlay.appendChild(rewardsContainer);
         overlay.appendChild(btnContainer);
 
         const handleComplete = () => {
-            if (this.onComplete) {
-                this.onComplete({
+            if (this.onBattleEnd) {
+                const result = {
                     win,
                     isAuto: this.isAuto,
                     rewards: calculatedRewards, // Pass dynamic rewards back
-                    finalSpeed: this.battleSpeed
-                });
+                    finalSpeed: this.battleSpeed,
+                    survivingHeroes: this.heroes.filter(h => !h.isDead).length
+                };
+                this.onBattleEnd(result);
             } else {
                 this.close();
             }
@@ -1555,6 +1974,16 @@ export class BattleArenaUI {
                 if (countdown <= 0) {
                     clearInterval(interval);
                     if (isRepeatMode) {
+                        if (this.onRoundComplete) {
+                            const result = {
+                                win,
+                                isAuto: this.isAuto,
+                                rewards: calculatedRewards,
+                                finalSpeed: this.battleSpeed,
+                                survivingHeroes: this.heroes.filter(h => !h.isDead).length
+                            };
+                            this.onRoundComplete(result);
+                        }
                         this.restart();
                     } else {
                         handleComplete();
@@ -1588,6 +2017,16 @@ export class BattleArenaUI {
             btn.onclick = () => {
                 clearInterval(interval);
                 if (isRepeatMode) {
+                    if (this.onRoundComplete) {
+                        const result = {
+                            win,
+                            isAuto: this.isAuto,
+                            rewards: calculatedRewards, // Use the already calculated rewards in scope
+                            finalSpeed: this.battleSpeed,
+                            survivingHeroes: this.heroes.filter(h => !h.isDead).length
+                        };
+                        this.onRoundComplete(result);
+                    }
                     this.restart();
                 } else {
                     handleComplete();

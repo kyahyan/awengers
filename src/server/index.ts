@@ -931,8 +931,47 @@ app.post('/api/hero/merge', async (req, res) => {
         }
 
         // All validations passed - perform merge
-        // 1. Remove sacrifices
+        // 1. Remove sacrifices and return items
         for (const sacId of sacrificeIds) {
+            const sacHero = userAny.heroes.get(sacId);
+
+            // Return items to inventory
+            if (sacHero.equipment && Array.isArray(sacHero.equipment)) {
+                const equipmentInventory = userAny.equipmentInventory || [];
+                const inventory = user.inventory || new Map();
+                let legacyInventoryUpdated = false;
+                let equipmentInventoryUpdated = false;
+
+                for (const itemId of sacHero.equipment) {
+                    if (!itemId) continue;
+
+                    // Check new equipmentInventory first
+                    const existingItemIndex = equipmentInventory.findIndex((eq: any) => eq.itemId === itemId && eq.heroId === sacId);
+
+                    if (existingItemIndex !== -1) {
+                        // Mark as unequipped
+                        equipmentInventory[existingItemIndex].equipped = false;
+                        equipmentInventory[existingItemIndex].heroId = undefined;
+                        equipmentInventoryUpdated = true;
+                        console.log(`[Merge] Returned ${itemId} to inventory from sacrificed hero ${sacId}`);
+                    } else {
+                        // Legacy fallback
+                        inventory.set(itemId, (inventory.get(itemId) || 0) + 1);
+                        legacyInventoryUpdated = true;
+                        console.log(`[Merge] Returned ${itemId} to legacy inventory from sacrificed hero ${sacId}`);
+                    }
+                }
+
+                if (legacyInventoryUpdated) {
+                    user.inventory = inventory;
+                    user.markModified('inventory');
+                }
+                if (equipmentInventoryUpdated) {
+                    userAny.equipmentInventory = equipmentInventory;
+                    user.markModified('equipmentInventory');
+                }
+            }
+
             userAny.heroes.delete(sacId);
         }
 

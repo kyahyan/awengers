@@ -14,8 +14,9 @@ import { UserProfile, addPlayerXp } from '../data/UserProfile';
 import { HERO_ASSETS } from '../data/HeroAssetsMap';
 import { AdventureModal } from './AdventureModal';
 import { BattleArenaUI } from './BattleArenaUI';
-import { JADE_LOTUS_SHRINE_STAGES } from '../data/AdventureData';
+import { JADE_LOTUS_SHRINE_STAGES, saveStageStars, calculateStars, Difficulty } from '../data/AdventureData';
 import { LootReward } from '../data/LootSystem';
+import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition } from '../data/HeroProgression';
 
 export class UIManager {
     private debugEl!: HTMLElement;
@@ -47,6 +48,7 @@ export class UIManager {
 
     private lastBattleAuto: boolean = false;
     private lastBattleSpeed: number = 2;
+    private lastBattleDifficulty: Difficulty = Difficulty.NORMAL;
 
     constructor() {
         this.uiContainer = document.getElementById('game-ui');
@@ -106,14 +108,14 @@ export class UIManager {
         }
     }
 
-    public getDeployedTeam(): { name: string, level: number, instanceId: string, stars: number }[] {
+    public getDeployedTeam(): { name: string, level: number, instanceId: string, stars: number, currentRankIndex?: number, experience?: number, skillLevels?: any, equipment?: any[] }[] {
         if (!this.currentUser || !this.currentUser.deployedTeam) return [];
 
         const deployedIds = this.currentUser.deployedTeam;
         const heroesMap = this.currentUser.heroes || {};
         const heroEntries = heroesMap instanceof Map ? Array.from(heroesMap.entries()) : Object.entries(heroesMap);
 
-        const team: { name: string, level: number, instanceId: string, stars: number }[] = [];
+        const team: { name: string, level: number, instanceId: string, stars: number, currentRankIndex?: number, experience?: number, skillLevels?: any, equipment?: any[] }[] = [];
 
         deployedIds.forEach((id: string) => {
             const entry = heroEntries.find(([k, v]) => k === id);
@@ -126,13 +128,17 @@ export class UIManager {
                     name: name,
                     level: data.level || 1,
                     instanceId: id,
-                    stars: data.stars || 1
+                    stars: data.stars || 1,
+                    currentRankIndex: data.currentRankIndex || 0,
+                    experience: data.experience || 0,
+                    skillLevels: data.skillLevels || {},
+                    equipment: data.equipment || new Array(9).fill(null)
                 });
             } else {
                 // Fallback for missing data
                 const raw = id.includes('_') ? id.split('_')[0] : id;
                 const name = raw.charAt(0).toUpperCase() + raw.slice(1);
-                team.push({ name, level: 1, instanceId: id, stars: 1 });
+                team.push({ name, level: 1, instanceId: id, stars: 1, equipment: new Array(9).fill(null) });
             }
         });
         return team;
@@ -605,24 +611,33 @@ export class UIManager {
             // So arg 2 IS getDeployedTeam.
             () => this.getDeployedTeam(),
             maxStage,
-            (stageId, win, isAuto, rewards, finalSpeed) => this.handleAdventureBattleResult(mapId, stageId, win, isAuto, rewards || [], finalSpeed),
+            (stageId, win, isAuto, rewards, finalSpeed, difficulty) => this.handleAdventureBattleResult(mapId, stageId, win, isAuto, rewards || [], finalSpeed, difficulty),
             this.lastBattleAuto,
-            this.lastBattleSpeed
+            this.lastBattleSpeed,
+            () => {
+                // onReset: Clear User Profile Progress
+                if (this.currentUser && this.currentUser.adventureProgress) {
+                    this.currentUser.adventureProgress.jadeLotusShrine = { maxStage: 1 };
+                    this.syncUser();
+                    console.log('[UIManager] Adventure Progress Reset in User Profile');
+                }
+            }
         );
 
         this.uiContainer?.appendChild(this.adventureModal.getElement());
         console.log(`[UIManager] Opened Adventure Modal for Map ${mapId}`);
     }
 
-    public handleAdventureBattleResult(mapId: number, stageId: number, win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number = 2) {
+    public handleAdventureBattleResult(mapId: number, stageId: number, win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number = 2, difficulty: Difficulty = Difficulty.NORMAL) {
 
         // Persist settings
         this.lastBattleAuto = isAuto;
         this.lastBattleSpeed = finalSpeed;
+        this.lastBattleDifficulty = difficulty;
         if (!this.currentUser) return;
 
         if (win) {
-            console.log(`[UIManager] Victory on Stage ${stageId}! Granting rewards...`);
+            console.log(`[UIManager] Victory on Stage ${stageId} (${difficulty})! Granting rewards...`);
 
             // 1. Process Dynamic Rewards
             if (rewards && rewards.length > 0) {
@@ -671,11 +686,18 @@ export class UIManager {
             if (!this.currentUser.adventureProgress) this.currentUser.adventureProgress = {};
             if (!this.currentUser.adventureProgress.jadeLotusShrine) this.currentUser.adventureProgress.jadeLotusShrine = { maxStage: 1 };
 
-            // If completed current max stage, unlock next
-            const currentMax = this.currentUser.adventureProgress.jadeLotusShrine.maxStage;
-            if (stageId === currentMax) {
-                this.currentUser.adventureProgress.jadeLotusShrine.maxStage = currentMax + 1;
-                console.log(`[UIManager] Unlocked Stage ${currentMax + 1}`);
+            // If completed current max stage, unlock next (ONLY IF NORMAL MODE or logic dictates)
+            // Usually Hard/Insane doesn't unlock new Stages? Or does it?
+            // "Clear First Normal ... Before unlocking Hard".
+            // So we only update Max Unlock if we are in Normal?
+            // Or maybe maxStage is global unlock?
+            // Let's assume maxStage tracks Stage Unlocks which are driven by Normal clear.
+            if (difficulty === Difficulty.NORMAL) {
+                const currentMax = this.currentUser.adventureProgress.jadeLotusShrine.maxStage;
+                if (stageId === currentMax) {
+                    this.currentUser.adventureProgress.jadeLotusShrine.maxStage = currentMax + 1;
+                    console.log(`[UIManager] Unlocked Stage ${currentMax + 1}`);
+                }
             }
 
             // 3. Save
@@ -697,7 +719,14 @@ export class UIManager {
             if (nextStage) {
                 console.log(`[UIManager] Auto-starting Stage ${nextStageId}`);
                 // Start next battle directly
-                const isNextFirstClear = nextStageId === (this.currentUser!.adventureProgress?.jadeLotusShrine?.maxStage || 1);
+                // Determine normalized Max Stage for First Clear bonus check
+                // This logic is slightly flawed if we play Hard/Insane, but let's stick to Normal progress for First Clear check
+                const isNextFirstClear = nextStageId === (this.currentUser!.adventureProgress?.jadeLotusShrine?.maxStage || 1) && difficulty === Difficulty.NORMAL;
+
+                // SCALING LOGIC
+                let level = nextStage.recommendedLevel;
+                if (difficulty === Difficulty.HARD) { level = Math.floor(level * 1.5 + 5); }
+                if (difficulty === Difficulty.INSANE) { level = Math.floor(level * 2 + 15); }
 
                 const battleUI = new BattleArenaUI(
                     this.getDeployedTeam(),
@@ -707,17 +736,27 @@ export class UIManager {
                     },
                     (result) => {
                         battleUI.close();
+
+                        // SAVE STARS for Auto-Battle
+                        if (result.win) {
+                            const totalHeroes = this.getDeployedTeam().length;
+                            const stars = calculateStars(totalHeroes, result.survivingHeroes);
+                            saveStageStars(nextStageId, difficulty, stars);
+                            console.log(`[UIManager] Auto-Saved ${stars} stars for Stage ${nextStageId} (${difficulty})`);
+                        }
+
                         this.handleAdventureBattleResult(
                             mapId,
                             nextStageId,
                             result.win,
                             result.isAuto,
                             result.rewards || [],
-                            result.finalSpeed || 2
+                            result.finalSpeed || 2,
+                            difficulty // Pass difficulty along
                         );
                     },
-                    nextStage.enemyIds[0] || 'treant',
-                    nextStage.recommendedLevel,
+                    nextStage.enemyIds, // Pass array
+                    level, // Scaled Level
                     this.lastBattleAuto, // persist auto state
                     mapId,
                     isNextFirstClear,
@@ -757,6 +796,10 @@ export class UIManager {
         if (this.forgeUI) {
             toRemove.push(this.forgeUI.getElement());
             this.forgeUI = null;
+        }
+        if (this.shardsUI) {
+            toRemove.push(this.shardsUI.getElement());
+            this.shardsUI = null;
         }
         // Batch remove in single frame
         if (toRemove.length > 0) {
@@ -1317,6 +1360,23 @@ export class UIManager {
                         font-family: 'SF Pro Rounded', sans-serif;
                     `;
                     titleRow.appendChild(title);
+
+                    // Total CP Display
+                    const totalCP = document.createElement('div');
+                    totalCP.style.cssText = `
+                        font-family: 'SF Pro Rounded', sans-serif;
+                        font-weight: bold;
+                        color: #f59e0b; 
+                        margin-left: auto;
+                        font-size: 1.2rem;
+                        background: rgba(0,0,0,0.3);
+                        padding: 8px 20px;
+                        border-radius: 20px;
+                        border: 1px solid #78350f;
+                        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                    `;
+                    totalCP.innerHTML = `<span style="color:#a07850; font-size:0.9em; margin-right:5px;">TEAM CP</span> 0`;
+                    titleRow.appendChild(totalCP);
                     deployContent.appendChild(titleRow);
 
                     // Team Slots Container
@@ -1396,6 +1456,20 @@ export class UIManager {
                             };
                             slot.appendChild(removeBtn);
                             slot.style.position = 'relative';
+
+                            // Make filled slot draggable for reordering
+                            slot.draggable = true;
+                            slot.ondragstart = (e) => {
+                                e.dataTransfer?.setData('text/plain', JSON.stringify({
+                                    instanceId: heroData.instanceId,
+                                    heroName: heroData.heroName,
+                                    fromSlot: slotIndex
+                                }));
+                                slot.style.opacity = '0.5';
+                            };
+                            slot.ondragend = () => {
+                                slot.style.opacity = '1';
+                            };
                         } else {
                             slot.innerHTML = '';
                             slot.style.border = '3px dashed #8b6542';
@@ -1418,12 +1492,31 @@ export class UIManager {
                                 font-weight: 600;
                             `;
                             slot.appendChild(slotLabel);
+
+                            // Empty slots are not draggable
+                            slot.draggable = false;
                         }
                     };
 
                     // Function to update deploy button state
                     const updateDeployButton = () => {
                         const count = selectedForDeploy.size;
+
+                        // Update CP
+                        let totalCPValue = 0;
+                        const userHeroes = (this.currentUser as any)?.heroes || {};
+                        const heroEntries = userHeroes instanceof Map
+                            ? Array.from(userHeroes.entries())
+                            : Object.entries(userHeroes);
+
+                        selectedForDeploy.forEach((data) => {
+                            const entry = heroEntries.find(([id]) => id === data.instanceId);
+                            if (entry) {
+                                const h = entry[1] as any;
+                                totalCPValue += this.calculateSingleHeroCP(h, data.instanceId);
+                            }
+                        });
+                        totalCP.innerHTML = `<span style="color:#a07850; font-size:0.9em; margin-right:5px;">TEAM CP</span> ${totalCPValue.toLocaleString()}`;
                         if (count > 0) {
                             deployBtn.style.opacity = '1';
                             deployBtn.style.cursor = 'pointer';
@@ -1462,6 +1555,69 @@ export class UIManager {
                             if (!selectedForDeploy.has(i)) {
                                 slot.style.borderColor = '#8b6542';
                                 slot.style.background = 'linear-gradient(135deg, #2b1d12 0%, #4a3222 100%)';
+                            }
+                        };
+
+                        // Drag and Drop - make slot a drop target
+                        slot.ondragover = (e) => {
+                            e.preventDefault();
+                            slot.style.borderColor = '#4ade80';
+                            slot.style.borderStyle = 'solid';
+                            slot.style.background = 'linear-gradient(135deg, #1a4d1a 0%, #2d5a26 100%)';
+                        };
+                        slot.ondragleave = () => {
+                            if (!selectedForDeploy.has(i)) {
+                                slot.style.borderColor = '#8b6542';
+                                slot.style.borderStyle = 'dashed';
+                                slot.style.background = 'linear-gradient(135deg, #2b1d12 0%, #4a3222 100%)';
+                            } else {
+                                slot.style.borderColor = '#ffd700';
+                                slot.style.borderStyle = 'solid';
+                            }
+                        };
+                        slot.ondrop = (e) => {
+                            e.preventDefault();
+                            const data = e.dataTransfer?.getData('text/plain');
+                            if (!data) return;
+
+                            try {
+                                const { instanceId, heroName, fromSlot } = JSON.parse(data);
+
+                                // If dragging from another slot (reordering)
+                                if (fromSlot !== undefined && fromSlot !== null) {
+                                    const existingInTarget = selectedForDeploy.get(i);
+                                    const draggedData = selectedForDeploy.get(fromSlot);
+
+                                    if (draggedData) {
+                                        // Swap if target has a hero, otherwise just move
+                                        if (existingInTarget) {
+                                            selectedForDeploy.set(fromSlot, existingInTarget);
+                                        } else {
+                                            selectedForDeploy.delete(fromSlot);
+                                        }
+                                        selectedForDeploy.set(i, draggedData);
+                                        updateSlot(fromSlot);
+                                    }
+                                } else {
+                                    // Dragging from hero grid
+                                    // Check if already deployed, remove from old slot
+                                    for (const [slotIdx, slotData] of selectedForDeploy) {
+                                        if (slotData.instanceId === instanceId) {
+                                            selectedForDeploy.delete(slotIdx);
+                                            updateSlot(slotIdx);
+                                            break;
+                                        }
+                                    }
+
+                                    // If target slot has a hero, just replace
+                                    selectedForDeploy.set(i, { instanceId, heroName });
+                                }
+
+                                updateSlot(i);
+                                updateDeployButton();
+                                renderHeroGrid();
+                            } catch (err) {
+                                console.error('[DragDrop] Failed to parse drop data:', err);
                             }
                         };
 
@@ -1874,6 +2030,19 @@ export class UIManager {
                             card.onmouseleave = () => {
                                 card.style.transform = 'scale(1)';
                                 card.style.borderColor = isSelected ? '#4ade80' : '#8b6542';
+                            };
+
+                            // Drag and Drop - make card draggable
+                            card.draggable = true;
+                            card.ondragstart = (e) => {
+                                e.dataTransfer?.setData('text/plain', JSON.stringify({
+                                    instanceId,
+                                    heroName: asset.name
+                                }));
+                                card.style.opacity = '0.5';
+                            };
+                            card.ondragend = () => {
+                                card.style.opacity = '1';
                             };
 
                             card.onclick = () => {
@@ -2521,7 +2690,7 @@ export class UIManager {
             const result = canBuildFromShards(shardId, this.currentUser!.inventory || {});
 
             if (!result.canBuild) {
-                console.warn('[UIManager] Cannot build:', result.reason);
+                // console.warn('[UIManager] Cannot build:', result.reason);
                 return;
             }
 
@@ -2554,5 +2723,57 @@ export class UIManager {
                 this.syncUser();
             }
         });
+    }
+
+    // Helper to calculate singular hero CP matching HeroUpgradeModal
+    private calculateSingleHeroCP(heroData: any, heroInstanceId: string): number {
+        const level = Number(heroData.level) || 1;
+
+        // Ensure accurate stats by recreating the manager
+        let manager: HeroProgressionManager;
+        const heroNameLower = (heroData.heroCodeName || heroInstanceId).toLowerCase();
+
+        // Construct a temp instance to pass to factory
+        const tempInstance = {
+            heroId: heroInstanceId,
+            level: level,
+            currentRankIndex: heroData.currentRankIndex || 0,
+            experience: heroData.experience || 0,
+            skillLevels: heroData.skillLevels || {},
+            equipment: heroData.equipment || new Array(9).fill(null)
+        };
+
+        if (heroNameLower.includes('ranger') || heroNameLower.includes('sable')) {
+            manager = createSableHero(level, tempInstance);
+        } else if (heroNameLower.includes('razor') || heroNameLower.includes('assassin')) {
+            manager = createRazorHero(level, tempInstance);
+        } else {
+            manager = createOryxHero(level, tempInstance);
+        }
+
+        const stats = manager.getTotalStats();
+        const config = manager.getConfig();
+        const skills = config.skills;
+
+        // CP Formula from HeroUpgradeModal
+        const hpPower = stats.hp * 0.1;
+        const atkPower = stats.atk * 5;
+        const armorPower = stats.armor * 10;
+        const aspdPower = stats.aspd * 1000;
+        const speedPower = stats.moveSpeed * 2;
+
+        let skillPower = 0;
+        skills.forEach(skill => {
+            skill.ranks.forEach((rank, index) => {
+                if (rank.unlockLevel <= level) {
+                    skillPower += (index + 1) * 5000;
+                    if (rank.damagePercent) skillPower += rank.damagePercent * 50;
+                }
+            });
+        });
+
+        const levelPower = level * 500;
+
+        return Math.floor(hpPower + atkPower + armorPower + aspdPower + speedPower + skillPower + levelPower);
     }
 }

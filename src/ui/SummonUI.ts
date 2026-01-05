@@ -1,8 +1,7 @@
-
-// import { SummonSystem } from '../systems/SummonSystem'; // Removed
 import { UserProfile } from '../data/UserProfile';
 import { HeroDef } from '../data/HeroDefinitions';
 import { ModalWrapper } from './ModalWrapper';
+import { HERO_ASSETS } from '../data/HeroAssetsMap';
 
 export class SummonUI {
     private modal: ModalWrapper;
@@ -21,7 +20,7 @@ export class SummonUI {
             this.user = JSON.parse(session);
         }
 
-        this.modal = new ModalWrapper('SUMMON', onClose, '70%', '70%');
+        this.modal = new ModalWrapper('SUMMON', onClose, '70%', '85%');
         this.initialize();
     }
 
@@ -184,12 +183,11 @@ export class SummonUI {
         this.resultOverlay.style.justifyContent = 'center';
         this.resultOverlay.style.alignItems = 'center';
         this.resultOverlay.style.zIndex = '10';
-        this.resultOverlay.style.borderRadius = '15px';
-        this.resultOverlay.onclick = () => {
-            this.resultOverlay.style.display = 'none';
-            this.isAnimating = false;
-            this.updateScrollCountDisplay();
-        };
+        // this.resultOverlay.style.borderRadius = '15px'; // Removed to cover full modal
+
+        // Removed inner onclick that closes it -> Now closing will be handled by a "Continue" button or end of flow
+        // But we can keep it as a fallback if needed, though for flip animation we want control.
+        // For now, let's allow clicking outside the cards to do nothing or maybe just consume clicks.
         parent.appendChild(this.resultOverlay);
     }
 
@@ -324,160 +322,353 @@ export class SummonUI {
         }
     }
 
+    private getHeroPortraitUrl(heroName: string): string {
+        const asset = HERO_ASSETS.find(a => a.name === heroName);
+        if (asset && asset.sprite2D) {
+            const spritePath = asset.sprite2D.spritesheetPath;
+            // e.g. /assets/Character/heroes/antelope_mage_with_animation_spritesheets/side-left/idle.png
+            const heroFolderMatch = spritePath.match(/\/assets\/Character\/heroes\/([^\/]+)/);
+            if (heroFolderMatch) {
+                const heroFolder = heroFolderMatch[1];
+                const portraitName = heroFolder.replace('_with_animation_spritesheets', '').replace(/_/g, ' ');
+                return `/assets/Character/heroes/${heroFolder}/portrait/${portraitName}.jpg`;
+            }
+        }
+        return ''; // Fallback
+    }
+
+    private createFlipCard(hero: HeroDef, size: 'small' | 'large' = 'small'): HTMLElement {
+        const width = size === 'large' ? '300px' : '180px';
+        const height = size === 'large' ? '440px' : '260px';
+
+        const scene = document.createElement('div');
+        scene.style.width = width;
+        scene.style.height = height;
+        scene.style.perspective = '1000px';
+        scene.style.cursor = 'pointer';
+
+        const card = document.createElement('div');
+        card.className = 'summon-flip-card';
+        card.style.width = '100%';
+        card.style.height = '100%';
+        card.style.position = 'relative';
+        card.style.transformStyle = 'preserve-3d';
+        card.style.transition = 'transform 0.6s';
+
+        // Card Front (The Hero Result) - initially hidden by rotation
+        const cardFront = document.createElement('div');
+        cardFront.style.position = 'absolute';
+        cardFront.style.width = '100%';
+        cardFront.style.height = '100%';
+        cardFront.style.backfaceVisibility = 'hidden';
+        cardFront.style.transform = 'rotateY(180deg)'; // Back of the card relative to initial state
+        cardFront.style.borderRadius = '18px'; // Slightly rounded corners for the whole card
+        cardFront.style.overflow = 'hidden'; // Clip portrait to border
+
+        // Build card front visual
+        const cardFrontImg = document.createElement('img');
+        cardFrontImg.src = '/assets/summon/summon-book/card-front.png';
+        cardFrontImg.style.width = '100%';
+        cardFrontImg.style.height = '100%';
+        cardFrontImg.style.objectFit = 'contain';
+        cardFrontImg.style.position = 'absolute';
+        cardFrontImg.style.top = '0';
+        cardFrontImg.style.left = '0';
+        cardFrontImg.style.zIndex = '2'; // Frame
+
+        // Portrait
+        const portraitUrl = this.getHeroPortraitUrl(hero.codeName || hero.name);
+        const portrait = document.createElement('div');
+        portrait.style.position = 'absolute';
+        portrait.style.top = '50%';
+        portrait.style.left = '50%';
+        portrait.style.transform = 'translate(-50%, -50%)';
+        portrait.style.width = '60%';
+        portrait.style.height = '60%';
+        portrait.style.backgroundImage = `url('${portraitUrl}')`;
+        portrait.style.backgroundSize = 'cover';
+        portrait.style.backgroundPosition = 'center';
+        portrait.style.zIndex = '1'; // Behind frame
+
+        // Glowing border based on rarity
+        const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : (hero.rarity === 'Legendary' ? '#ffd700' : '#4facfe');
+        if (hero.rarity !== 'Standard') {
+            cardFront.style.boxShadow = `0 0 20px ${glowColor}`;
+        }
+
+        // Info (Stars/Name) - Overlay on top of frame
+        const info = document.createElement('div');
+        info.style.position = 'absolute';
+        info.style.bottom = '8%';
+        info.style.width = '100%';
+        info.style.textAlign = 'center';
+        info.style.zIndex = '3';
+
+        const stars = document.createElement('div');
+        stars.innerHTML = '⭐'.repeat(1);
+        if (hero.rarity === 'Mythic') stars.innerHTML = '⭐⭐⭐⭐⭐';
+        else if (hero.rarity === 'Legendary') stars.innerHTML = '⭐⭐⭐⭐';
+        else stars.innerHTML = '⭐';
+
+        const name = document.createElement('div');
+        name.innerText = hero.name;
+        name.style.color = '#fff';
+        name.style.fontWeight = 'bold';
+        name.style.fontSize = size === 'large' ? '1.5rem' : '0.9rem';
+        name.style.textShadow = '0 2px 4px #000';
+        name.style.marginTop = '4px';
+        name.style.fontFamily = "'SF Pro Rounded', sans-serif";
+
+        info.appendChild(stars);
+        info.appendChild(name);
+
+        cardFront.appendChild(portrait);
+        cardFront.appendChild(cardFrontImg);
+        cardFront.appendChild(info);
+
+        // Card Back
+        const cardBack = document.createElement('div');
+        cardBack.style.position = 'absolute';
+        cardBack.style.width = '100%';
+        cardBack.style.height = '100%';
+        cardBack.style.backfaceVisibility = 'hidden';
+        cardBack.style.transform = 'rotateY(0deg)';
+        cardBack.style.borderRadius = '18px';
+        cardBack.style.overflow = 'hidden';
+
+        const cardBackImg = document.createElement('img');
+        cardBackImg.src = '/assets/summon/summon-book/card-back.png';
+        cardBackImg.style.width = '100%';
+        cardBackImg.style.height = '100%';
+        cardBackImg.style.objectFit = 'contain';
+
+        cardBack.appendChild(cardBackImg);
+
+        card.appendChild(cardFront); // Added first but rotated
+        card.appendChild(cardBack);  // Added second, visible
+        scene.appendChild(card);
+
+        // Click to flip
+        scene.onclick = () => {
+            if (!card.classList.contains('flipped')) {
+                card.classList.add('flipped');
+                card.style.transform = 'rotateY(180deg)';
+
+                // If mythic, add extra effect?
+                if (hero.rarity === 'Mythic') {
+                    // trigger flash?
+                }
+            }
+        };
+
+        return scene;
+    }
+
     private revealHero(hero: HeroDef) {
-        const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : '#4facfe';
-
         this.resultOverlay.innerHTML = '';
+        this.resultOverlay.style.display = 'flex';
+        this.resultOverlay.style.background = 'rgba(0,0,0,0.95)';
 
+        const scene = this.createFlipCard(hero, 'large');
+
+        // Center Container
+        const center = document.createElement('div');
+        center.style.display = 'flex';
+        center.style.flexDirection = 'column';
+        center.style.alignItems = 'center';
+        center.style.gap = '30px';
+
+        center.appendChild(scene);
+
+        // Continue Button (Only appears after flip? or always?)
+        // Let's make it appear after a short delay or always there but maybe 'Tap card to reveal' hint
+        const hint = document.createElement('div');
+        hint.innerText = "Tap card to reveal!";
+        hint.style.color = '#ccc';
+        hint.style.fontSize = '1.2rem';
+        hint.style.animation = 'pulse 1s infinite alternate';
+
+        // Add minimal styles
         const style = document.createElement('style');
         style.innerText = `
-            @keyframes popIn {
-                0% { transform: scale(0) rotate(-180deg); opacity: 0; }
-                100% { transform: scale(1) rotate(0deg); opacity: 1; }
-            }
-            @keyframes glow {
-                0%, 100% { box-shadow: 0 0 30px ${glowColor}; }
-                50% { box-shadow: 0 0 60px ${glowColor}, 0 0 80px ${glowColor}; }
-            }
+            @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
         `;
         this.resultOverlay.appendChild(style);
 
-        const cardContainer = document.createElement('div');
-        cardContainer.style.position = 'relative';
-        cardContainer.style.width = '280px';
-        cardContainer.style.height = '380px';
-        cardContainer.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), glow 2s ease-in-out infinite';
-        cardContainer.style.background = 'linear-gradient(135deg, #1a1a2e, #16213e)';
-        cardContainer.style.borderRadius = '20px';
-        cardContainer.style.border = `4px solid ${glowColor}`;
-        cardContainer.style.display = 'flex';
-        cardContainer.style.flexDirection = 'column';
-        cardContainer.style.alignItems = 'center';
-        cardContainer.style.justifyContent = 'center';
-        cardContainer.style.padding = '20px';
+        center.appendChild(hint);
 
-        const rarityLabel = document.createElement('div');
-        rarityLabel.innerText = hero.rarity;
-        rarityLabel.style.color = glowColor;
-        rarityLabel.style.fontSize = '1.2rem';
-        rarityLabel.style.fontWeight = 'bold';
-        rarityLabel.style.textTransform = 'uppercase';
-        rarityLabel.style.letterSpacing = '2px';
-        rarityLabel.style.marginBottom = '15px';
-        cardContainer.appendChild(rarityLabel);
+        // Close/Continue Button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = "Close";
+        closeBtn.style.padding = '10px 30px';
+        closeBtn.style.background = '#333';
+        closeBtn.style.color = '#fff';
+        closeBtn.style.border = '2px solid #555';
+        closeBtn.style.borderRadius = '20px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.marginTop = '20px';
+        closeBtn.style.display = 'none'; // Hidden until flipped
 
-        const heroIcon = document.createElement('div');
-        heroIcon.innerText = '⭐';
-        heroIcon.style.fontSize = '80px';
-        heroIcon.style.marginBottom = '15px';
-        cardContainer.appendChild(heroIcon);
+        closeBtn.onclick = () => {
+            this.resultOverlay.style.display = 'none';
+            this.isAnimating = false;
+        };
+        center.appendChild(closeBtn);
 
-        const nameLabel = document.createElement('div');
-        nameLabel.innerText = hero.name;
-        nameLabel.style.color = 'white';
-        nameLabel.style.fontSize = '1.6rem';
-        nameLabel.style.fontWeight = 'bold';
-        nameLabel.style.textAlign = 'center';
-        nameLabel.style.textShadow = '0 2px 4px black';
-        nameLabel.style.fontFamily = "'SF Pro Rounded', sans-serif";
-        cardContainer.appendChild(nameLabel);
+        // Hook into click to show button
+        const originalClick = (scene as any).onclick;
+        scene.onclick = (e) => {
+            if (originalClick) originalClick(e);
+            hint.style.display = 'none';
+            closeBtn.style.display = 'block';
+        };
 
-        const classLabel = document.createElement('div');
-        classLabel.innerText = `${hero.class} Hero`;
-        classLabel.style.color = '#aaa';
-        classLabel.style.fontSize = '1rem';
-        classLabel.style.marginTop = '8px';
-        cardContainer.appendChild(classLabel);
-
-        this.resultOverlay.appendChild(cardContainer);
-
-        const helpText = document.createElement('div');
-        helpText.innerText = "Tap to Continue";
-        helpText.style.color = '#666';
-        helpText.style.marginTop = '25px';
-        helpText.style.fontSize = '1rem';
-        this.resultOverlay.appendChild(helpText);
-
-        this.resultOverlay.style.display = 'flex';
+        this.resultOverlay.appendChild(center);
     }
 
     private revealMultipleHeroes(heroes: HeroDef[]) {
         this.resultOverlay.innerHTML = '';
+        this.resultOverlay.style.display = 'flex';
+        this.resultOverlay.style.flexDirection = 'column';
+        this.resultOverlay.style.background = 'rgba(0,0,0,0.95)';
 
-        const style = document.createElement('style');
-        style.innerText = `
-            @keyframes popIn {
-                0% { transform: scale(0); opacity: 0; }
-                100% { transform: scale(1); opacity: 1; }
-            }
-        `;
-        this.resultOverlay.appendChild(style);
-
+        // Title
         const title = document.createElement('div');
-        title.innerText = '🎉 x10 SUMMON RESULTS 🎉';
+        title.innerText = '🎉 SUMMON RESULTS 🎉';
         title.style.color = '#ffd700';
-        title.style.fontSize = '1.8rem';
+        title.style.fontSize = '2rem';
         title.style.fontWeight = 'bold';
-        title.style.marginBottom = '30px';
+        title.style.marginTop = '100px'; // Added margin top
+        title.style.marginBottom = '20px';
         title.style.fontFamily = "'SF Pro Rounded', sans-serif";
-        title.style.textShadow = '0 2px 10px rgba(255,215,0,0.5)';
         this.resultOverlay.appendChild(title);
 
+        // Grid
         const grid = document.createElement('div');
         grid.style.display = 'grid';
         grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
-        grid.style.gap = '15px';
-        grid.style.maxWidth = '90%';
+        grid.style.gap = '20px';
+        grid.style.perspective = '1000px';
 
-        heroes.forEach((hero, index) => {
-            const glowColor = hero.rarity === 'Mythic' ? '#ff4444' : '#4facfe';
+        const cardScenes: HTMLElement[] = [];
 
-            const card = document.createElement('div');
-            card.style.background = 'linear-gradient(135deg, #1a1a2e, #16213e)';
-            card.style.borderRadius = '12px';
-            card.style.border = `3px solid ${glowColor}`;
-            card.style.padding = '15px';
-            card.style.display = 'flex';
-            card.style.flexDirection = 'column';
-            card.style.alignItems = 'center';
-            card.style.animation = `popIn 0.5s ease ${index * 0.1}s backwards`;
-
-            const rarityLabel = document.createElement('div');
-            rarityLabel.innerText = hero.rarity;
-            rarityLabel.style.color = glowColor;
-            rarityLabel.style.fontSize = '0.8rem';
-            rarityLabel.style.fontWeight = 'bold';
-            rarityLabel.style.marginBottom = '8px';
-            card.appendChild(rarityLabel);
-
-            const heroIcon = document.createElement('div');
-            heroIcon.innerText = '⭐';
-            heroIcon.style.fontSize = '40px';
-            heroIcon.style.marginBottom = '8px';
-            card.appendChild(heroIcon);
-
-            const nameLabel = document.createElement('div');
-            nameLabel.innerText = hero.name;
-            nameLabel.style.color = 'white';
-            nameLabel.style.fontSize = '0.9rem';
-            nameLabel.style.fontWeight = 'bold';
-            nameLabel.style.textAlign = 'center';
-            nameLabel.style.fontFamily = "'SF Pro Rounded', sans-serif";
-            card.appendChild(nameLabel);
-
-            grid.appendChild(card);
+        heroes.forEach(hero => {
+            const scene = this.createFlipCard(hero, 'small');
+            grid.appendChild(scene);
+            cardScenes.push(scene);
         });
 
         this.resultOverlay.appendChild(grid);
 
-        const helpText = document.createElement('div');
-        helpText.innerText = "Tap to Continue";
-        helpText.style.color = '#666';
-        helpText.style.marginTop = '30px';
-        helpText.style.fontSize = '1rem';
-        this.resultOverlay.appendChild(helpText);
+        // Animate spread from center
+        requestAnimationFrame(() => {
+            const gridRect = grid.getBoundingClientRect();
+            const cx = gridRect.left + gridRect.width / 2;
+            const cy = gridRect.top + gridRect.height / 2;
 
-        this.resultOverlay.style.display = 'flex';
+            const diffs = cardScenes.map(scene => {
+                const r = scene.getBoundingClientRect();
+                return {
+                    x: cx - (r.left + r.width / 2),
+                    y: cy - (r.top + r.height / 2)
+                };
+            });
+
+            // Apply initial state (center and small)
+            cardScenes.forEach((scene, i) => {
+                scene.style.transition = 'none';
+                scene.style.transform = `translate(${diffs[i].x}px, ${diffs[i].y}px) scale(0)`;
+            });
+
+            // Trigger reflow to apply initial state
+            void this.resultOverlay.offsetWidth;
+
+            // Animate to final state
+            cardScenes.forEach(scene => {
+                // Add staggered delay based on distance to center or index?
+                // User asked "synchronize", implying all at once or maybe organized.
+                // "spread cards from the center to there location synchronize" -> Synchronized spread usually means all start together.
+                scene.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                scene.style.transform = '';
+            });
+        });
+
+        // Controls Area
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '20px';
+        controls.style.marginTop = '30px';
+        controls.style.marginBottom = '30px'; // Added margin bottom
+
+        // Skip Button
+        const skipBtn = document.createElement('button');
+        skipBtn.innerText = "SKIP (Flip All)";
+        skipBtn.style.padding = '12px 30px';
+        skipBtn.style.background = 'linear-gradient(45deg, #ff9966, #ff5e62)';
+        skipBtn.style.border = 'none';
+        skipBtn.style.borderRadius = '25px';
+        skipBtn.style.color = 'white';
+        skipBtn.style.fontWeight = 'bold';
+        skipBtn.style.fontSize = '1rem';
+        skipBtn.style.cursor = 'pointer';
+        skipBtn.style.boxShadow = '0 4px 15px rgba(255, 94, 98, 0.4)';
+
+        skipBtn.onclick = () => {
+            cardScenes.forEach(scene => {
+                const card = scene.querySelector('.summon-flip-card') as HTMLElement;
+                if (card && !card.classList.contains('flipped')) {
+                    card.classList.add('flipped');
+                    card.style.transform = 'rotateY(180deg)';
+                }
+            });
+            skipBtn.style.display = 'none';
+            closeBtn.style.display = 'block';
+        };
+
+        // Close Button (Hidden initially)
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = "Continue";
+        closeBtn.style.padding = '12px 30px';
+        closeBtn.style.background = 'linear-gradient(45deg, #56ab2f, #a8e063)';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '25px';
+        closeBtn.style.color = 'white';
+        closeBtn.style.fontWeight = 'bold';
+        closeBtn.style.fontSize = '1rem';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.boxShadow = '0 4px 15px rgba(86, 171, 47, 0.4)';
+
+        closeBtn.onclick = () => {
+            this.resultOverlay.style.display = 'none';
+            this.isAnimating = false;
+            this.updateScrollCountDisplay();
+        };
+
+        // Add tracking to manual flips
+        let flippedCount = 0;
+        cardScenes.forEach(scene => {
+            const originalClick = (scene as any).onclick;
+            scene.onclick = (e) => {
+                const card = scene.querySelector('.summon-flip-card') as HTMLElement;
+                if (!card.classList.contains('flipped')) {
+                    // Will flip in original handler
+                    flippedCount++;
+                }
+                if (originalClick) originalClick(e);
+
+                if (flippedCount === heroes.length) {
+                    skipBtn.style.display = 'none';
+                    closeBtn.style.display = 'block';
+                }
+            };
+        });
+
+        // Let's start with Skip visible, Close hidden.
+        closeBtn.style.display = 'none';
+
+        controls.appendChild(skipBtn);
+        controls.appendChild(closeBtn);
+        this.resultOverlay.appendChild(controls);
     }
 
     public getElement(): HTMLElement {

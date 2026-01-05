@@ -10,6 +10,50 @@ export interface StageDefinition {
     drops: string[]; // List of drop icon paths
 }
 
+export enum Difficulty {
+    NORMAL = 'Normal',
+    HARD = 'Hard',
+    INSANE = 'Insane'
+}
+
+export interface AdventureProgress {
+    [stageId: number]: {
+        [Difficulty.NORMAL]?: number; // Stars (1-3)
+        [Difficulty.HARD]?: number;
+        [Difficulty.INSANE]?: number;
+    }
+}
+
+// Persist progress in localStorage
+const STORAGE_KEY = 'awe_adventure_progress';
+function loadProgress(): AdventureProgress {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+}
+
+export const ADVENTURE_PROGRESS: AdventureProgress = loadProgress();
+
+export function saveStageStars(stageId: number, difficulty: Difficulty, stars: number) {
+    if (!ADVENTURE_PROGRESS[stageId]) ADVENTURE_PROGRESS[stageId] = {};
+    const current = ADVENTURE_PROGRESS[stageId][difficulty] || 0;
+    if (stars > current) {
+        ADVENTURE_PROGRESS[stageId][difficulty] = stars;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ADVENTURE_PROGRESS));
+    }
+}
+
+export function resetAdventureProgress() {
+    for (const key in ADVENTURE_PROGRESS) delete ADVENTURE_PROGRESS[key];
+    localStorage.removeItem(STORAGE_KEY);
+    // Also reset max unlock if we were tracking it differently, but it seems derived or we just need to refresh.
+}
+
+export function getStageStars(stageId: number, difficulty: Difficulty): number {
+    return ADVENTURE_PROGRESS[stageId]?.[difficulty] || 0;
+}
+
 export const JADE_LOTUS_SHRINE_STAGES: StageDefinition[] = [];
 
 const STAGE_NAMES = [
@@ -23,23 +67,23 @@ const STAGE_NAMES = [
 
 // Mock drops
 const MOCK_DROPS = [
-    '/assets/items/gold.png',
-    '/assets/items/exp_potion.png'
+    '/assets/potions/coin-icon.png',
+    '/assets/potions/hero-potion-icon.png'
 ];
 
 // Generate stages with Treant enemies
 for (let i = 1; i <= 30; i++) {
-    const enemyCount = Math.floor(Math.random() * 3) + 1; // 1-3 enemies per stage
+    const enemyCount = 6; // Fixed 6 enemies per stage
     const enemies: string[] = [];
 
     for (let j = 0; j < enemyCount; j++) {
         // Every 10th stage has a boss, every 5th has an elite
         if (i % 10 === 0 && j === 0) {
-            enemies.push('treant_boss');
+            enemies.push('boar_boss');
         } else if (i % 5 === 0 && j === 0) {
-            enemies.push('treant_elite');
+            enemies.push('boar_elite');
         } else {
-            enemies.push('treant');
+            enemies.push('boar');
         }
     }
 
@@ -48,7 +92,7 @@ for (let i = 1; i <= 30; i++) {
         name: `${i}. ${STAGE_NAMES[i - 1] || 'Unknown Area'}`,
         description: "A challenging battle awaits.",
         energyCost: 0,
-        recommendedLevel: i * 2, // Scaling level
+        recommendedLevel: i, // Match Stage ID
         enemyIds: enemies,
         drops: MOCK_DROPS
     });
@@ -66,5 +110,12 @@ export function getStageEnemyIcons(stage: StageDefinition): string[] {
 export function getStageMainEnemy(stage: StageDefinition): EnemyDefinition | undefined {
     const id = stage.enemyIds[0];
     return ENEMY_DEFINITIONS.find(e => e.id === id);
+}
+
+export function calculateStars(totalHeroes: number, survivingHeroes: number): number {
+    const dead = totalHeroes - survivingHeroes;
+    if (dead === 0) return 3;
+    if (dead === 1) return 2;
+    return 1;
 }
 

@@ -749,13 +749,41 @@ export class GalleryHeroModal {
     /**
      * Open the battle arena demo
      */
+    /**
+     * Open the battle arena demo
+     */
     private openBattleArena() {
         // Use the stored asset name which matches HERO_ASSETS keys
         const assetName = this.heroAssetName;
 
-        const battleArena = new BattleArenaUI(assetName, () => {
-            // Battle arena closed - nothing special to do
-        });
+        // Mock Team: Single Hero at max level
+        const heroTeam = [{
+            name: assetName,
+            level: 250,
+            instanceId: 'demo_hero',
+            stars: 5
+        }];
+
+        // Mock Enemy for Demo
+        const enemyIds = ['boar_elite'];
+
+        const battleArena = new BattleArenaUI(
+            heroTeam,
+            () => {
+                // onClose
+                battleArena.getElement().remove();
+            },
+            (result) => {
+                // onBattleEnd
+                battleArena.close();
+            },
+            enemyIds,
+            250, // Stage Level
+            false, // Auto
+            1, // Map ID
+            false, // First Clear
+            2 // Speed
+        );
         document.body.appendChild(battleArena.getElement());
     }
 }

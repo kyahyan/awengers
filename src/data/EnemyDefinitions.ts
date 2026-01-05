@@ -9,7 +9,9 @@ export interface EnemyAnimationConfig {
 export interface EnemySprite {
     basePath: string;
     frameSize: number;
+    icon?: string; // Optional icon override for battle UI
     animations: {
+
         idle: EnemyAnimationConfig;
         attack: EnemyAnimationConfig;
         hit: EnemyAnimationConfig;
@@ -51,88 +53,83 @@ export function getEnemyStatsForLevel(enemy: EnemyDefinition, level: number): En
     };
 }
 
-// Treant Enemy Definition
-const TREANT: EnemyDefinition = {
-    id: 'treant',
-    name: 'Treant',
-    displayName: 'Ancient Treant',
+// Boar Assassin Enemy Definition
+const BOAR_ASSASSIN: EnemyDefinition = {
+    id: 'boar',
+    name: 'Boar Assassin',
+    displayName: 'Boar Assassin',
     type: 'normal',
-    icon: '/assets/Character/enemy/demo-enemy/Treant_with_anim_spritesheets/front-view/Armature_Armature_Treant_Pose_Base_Layer_spritesheet.png',
+    icon: '/assets/Character/enemy/boar_assassin_with_animation_spritesheets/portrait/boar%20assassin.jpg',
     baseStats: {
         hp: 800,
-        atk: 45,
-        def: 30,
-        speed: 0.6,
-        crit: '5%'
+        atk: 55,
+        def: 25,
+        speed: 0.8,
+        crit: '10%'
     },
     sprite: {
-        basePath: '/assets/Character/enemy/demo-enemy/Treant_with_anim_spritesheets/iso-right/',
-        frameSize: 512, // Estimated frame size
+        basePath: '/assets/Character/enemy/boar_assassin_with_animation_spritesheets/side-right/',
+        frameSize: 512,
         animations: {
             idle: {
-                file: 'Armature_Armature_Treant_Stand_Base_Layer_spritesheet.png',
-                frames: 40, // Estimated
-                framesPerRow: 8
+                file: 'Armature_Armature_idle_Base_Layer_001_spritesheet.png',
+                frames: 48,
+                framesPerRow: 5
             },
             attack: {
-                file: 'Armature_Armature_Treant_AbilityBranchHit_Base_Layer_spritesheet.png',
-                frames: 30,
-                framesPerRow: 8
+                file: 'Armature_Armature_skill1_Base_Layer_001_spritesheet.png',
+                frames: 40, // Estimation based on hero config logic or similar
+                framesPerRow: 5
             },
             hit: {
-                file: 'Armature_Armature_Treant_DeployEnd_Base_Layer_spritesheet.png',
-                frames: 15,
-                framesPerRow: 8
+                file: 'Armature_Armature_hit1_Base_Layer_001_spritesheet.png',
+                frames: 12, // Adjusted to remove blinking blanks
+                framesPerRow: 5
             },
             dead: {
-                file: 'Armature_Armature_Treant_Celebration_Base_Layer_spritesheet.png',
-                frames: 50,
-                framesPerRow: 8
-            },
-            walk: {
-                file: 'Armature_Armature_Treant_Walk_Base_Layer_spritesheet.png',
-                frames: 20,
-                framesPerRow: 8
+                file: 'Armature_Armature_dead_Base_Layer_001_spritesheet.png',
+                frames: 59, // Estimation
+                framesPerRow: 5
             }
         }
     }
 };
 
-// Elite Treant variant
-const TREANT_ELITE: EnemyDefinition = {
-    ...TREANT,
-    id: 'treant_elite',
-    displayName: 'Elder Treant',
+// Elite Boar variant
+const BOAR_ELITE: EnemyDefinition = {
+    ...BOAR_ASSASSIN,
+    id: 'boar_elite',
+    displayName: 'Shadow Boar',
     type: 'elite',
     baseStats: {
-        hp: 1200,
-        atk: 65,
-        def: 45,
-        speed: 0.7,
-        crit: '10%'
+        hp: 1500,
+        atk: 75,
+        def: 40,
+        speed: 1.0,
+        crit: '15%'
     }
 };
 
-// Boss Treant variant
-const TREANT_BOSS: EnemyDefinition = {
-    ...TREANT,
-    id: 'treant_boss',
-    displayName: 'Ancient Guardian',
+// Boss Boar variant
+const BOAR_BOSS: EnemyDefinition = {
+    ...BOAR_ASSASSIN,
+    id: 'boar_boss',
+    displayName: 'Boar Overlord',
     type: 'boss',
     baseStats: {
-        hp: 2500,
-        atk: 90,
+        hp: 3000,
+        atk: 100,
         def: 60,
-        speed: 0.5,
-        crit: '15%'
+        speed: 0.8,
+        crit: '20%'
     }
 };
 
 // Export all enemies
 export const ENEMY_DEFINITIONS: EnemyDefinition[] = [
-    TREANT,
-    TREANT_ELITE,
-    TREANT_BOSS
+    BOAR_ASSASSIN,
+    BOAR_ELITE,
+    BOAR_BOSS
 ];
 
 // Helper to get enemy by ID

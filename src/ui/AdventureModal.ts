@@ -1,27 +1,31 @@
-import { JADE_LOTUS_SHRINE_STAGES, StageDefinition, getStageEnemyIcons, getStageMainEnemy } from '../data/AdventureData';
+﻿import { JADE_LOTUS_SHRINE_STAGES, StageDefinition, getStageEnemyIcons, getStageMainEnemy, Difficulty, getStageStars, saveStageStars, resetAdventureProgress, ADVENTURE_PROGRESS } from '../data/AdventureData';
+import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager } from '../data/HeroProgression';
+import { ENEMY_DEFINITIONS, getEnemyStatsForLevel } from '../data/EnemyDefinitions';
 import { BattleArenaUI } from './BattleArenaUI';
-import { LootReward } from '../data/LootSystem';
+import { LootReward, getPossibleRewards } from '../data/LootSystem';
 
 export class AdventureModal {
     private container: HTMLElement;
     private onClose: () => void;
 
-    private getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number }[];
+    private getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number, currentRankIndex?: number, experience?: number, skillLevels?: any, equipment?: any[] }[];
 
-    private onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number) => void;
+    private onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number, difficulty?: Difficulty) => void;
 
     constructor(
         onClose: () => void,
-        getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number }[],
+        getDeployedTeam: () => { name: string, level: number, instanceId: string, stars: number, currentRankIndex?: number, experience?: number, skillLevels?: any, equipment?: any[] }[],
         private maxStage: number = 1,
-        onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number) => void,
+        onBattleResult?: (stageId: number, win: boolean, isAuto: boolean, rewards?: LootReward[], finalSpeed?: number, difficulty?: Difficulty) => void,
         private initialAuto: boolean = false,
-        private initialSpeed: number = 2
+        private initialSpeed: number = 2,
+        private onReset?: () => void
     ) {
         this.onClose = onClose;
         this.getDeployedTeam = getDeployedTeam;
         this.maxStage = maxStage;
         this.onBattleResult = onBattleResult;
+        this.onReset = onReset;
         this.container = document.createElement('div');
         this.container.className = 'adventure-modal-overlay';
 
@@ -56,7 +60,11 @@ export class AdventureModal {
         }, 300);
     }
 
-    private startBattle(stage: StageDefinition) {
+    private currentDifficulty: Difficulty = Difficulty.NORMAL;
+
+    // ...
+
+    private startBattle(stage: StageDefinition, difficulty: Difficulty = Difficulty.NORMAL) {
         const enemy = getStageMainEnemy(stage);
         if (!enemy) {
             console.error('[Adventure] No enemy found for stage:', stage.id);
@@ -65,44 +73,165 @@ export class AdventureModal {
 
         const deployedTeam = this.getDeployedTeam();
         if (deployedTeam.length === 0) {
-            alert("No heroes deployed! Please deploy a team in the Deployment tab.");
+            alert('No heroes deployed! Please deploy a team in the Deployment tab.');
             return;
         }
 
-        console.log(`[Adventure] Starting battle with ${enemy.displayName} (Level ${stage.recommendedLevel})`);
-        console.log(`[Adventure] Deployed Team:`, deployedTeam);
+        // Calculate full stats for deployed team
+        const detailedTeam = deployedTeam.map(hero => {
+            const level = Number(hero.level) || 1;
+            let manager: HeroProgressionManager;
+            const heroNameLower = (hero.name || hero.instanceId).toLowerCase();
+
+            // Construct temp instance
+            const tempInstance = {
+                heroId: hero.instanceId,
+                level: level,
+                currentRankIndex: hero.currentRankIndex || 0,
+                experience: hero.experience || 0,
+                skillLevels: hero.skillLevels || {},
+                equipment: hero.equipment || new Array(9).fill(null)
+            };
+
+            if (heroNameLower.includes('ranger') || heroNameLower.includes('sable')) {
+                manager = createSableHero(level, tempInstance);
+            } else if (heroNameLower.includes('razor') || heroNameLower.includes('assassin')) {
+                manager = createRazorHero(level, tempInstance);
+            } else {
+                manager = createOryxHero(level, tempInstance);
+            }
+
+            const totalStats = manager.getTotalStats();
+            const config = manager.getConfig();
+
+            return {
+                ...hero,
+                stats: {
+                    hp: totalStats.hp,
+                    atk: totalStats.atk,
+                    def: totalStats.armor,
+                    speed: totalStats.aspd,
+                    crit: '10%' // Default or calculated if available
+                },
+                skills: config.skills,
+                moveSpeed: totalStats.moveSpeed
+            };
+        });
+
+        console.log(`[Adventure] Starting battle with ${enemy.name} (Level ${stage.recommendedLevel})`);
+        console.log(`[Adventure] Detailed Team:`, detailedTeam);
 
         // Close the adventure modal
         this.close();
 
         // Create battle UI with team data
         setTimeout(() => {
-            const enemyId = stage.enemyIds[0] || 'treant';
+            try {
+                const enemyIds = stage.enemyIds; // Use full list of enemy IDs
 
-            const isFirstClear = stage.id === this.maxStage; // Assume maxStage is the highest unlocked
-            const mapId = 1; // Currently only Jade Lotus Shrine (Map 1) implemented
+                const isFirstClear = stage.id === this.getMaxUnlockedStage();
+                const mapId = 1; // Currently only Jade Lotus Shrine (Map 1) implemented
 
-            const battleUI = new BattleArenaUI(
-                deployedTeam,
-                () => console.log('[Adventure] Battle ended'),
-                (result) => {
-                    battleUI.close();
-                    if (this.onBattleResult) {
-                        this.onBattleResult(stage.id, result.win, result.isAuto, result.rewards, result.finalSpeed);
-                    }
-                },
-                enemyId,
-                stage.recommendedLevel,
-                this.initialAuto, // use persisted auto
-                mapId,
-                isFirstClear,
-                this.initialSpeed // use persisted speed
-            );
+                // Difficulty Scaling for BattleArenaUI
+                let level = stage.recommendedLevel;
+                if (difficulty === Difficulty.HARD) { level = Math.floor(level * 1.5 + 5); }
+                if (difficulty === Difficulty.INSANE) { level = Math.floor(level * 2 + 15); }
 
-            document.body.appendChild(battleUI.getElement());
+                const battleUI = new BattleArenaUI(
+                    detailedTeam,
+                    () => console.log('[Adventure] Battle ended'),
+                    (result) => this.handleBattleResult(stage, result, true, battleUI),
+                    enemyIds,
+                    level,
+                    this.initialAuto,
+                    mapId,
+                    isFirstClear,
+                    this.initialSpeed,
+                    (result) => this.handleBattleResult(stage, result, false, null)
+                );
+            } catch (e) {
+                console.error('Failed to start battle:', e);
+            }
+        }, 300);
+    }
 
-            document.body.appendChild(battleUI.getElement());
-        }, 350);
+    private getMaxUnlockedStage(): number {
+        let max = 0;
+        for (const id in ADVENTURE_PROGRESS) {
+            const stars = ADVENTURE_PROGRESS[id][Difficulty.NORMAL] || 0;
+            if (stars > 0) {
+                const stageId = parseInt(id);
+                if (stageId > max) max = stageId;
+            }
+        }
+        return max + 1;
+    }
+
+    private handleBattleResult(stage: StageDefinition, result: { win: boolean, isAuto: boolean, rewards: LootReward[], finalSpeed: number, survivingHeroes: number }, shouldClose: boolean, battleUI: BattleArenaUI | null) {
+        if (shouldClose && battleUI) battleUI.close();
+
+        let stars = 0;
+        if (result.win) {
+            const totalHeroes = this.getDeployedTeam().length;
+            const survivors = result.survivingHeroes;
+            const dead = totalHeroes - survivors;
+
+            if (dead === 0) stars = 3;
+            else if (dead === 1) stars = 2;
+            else stars = 1;
+
+            saveStageStars(stage.id, this.currentDifficulty, stars);
+        }
+
+        if (this.onBattleResult) {
+            this.onBattleResult(stage.id, result.win, result.isAuto, result.rewards, result.finalSpeed, this.currentDifficulty);
+        }
+    }
+    private isDifficultyUnlocked(diff: Difficulty): boolean {
+        if (diff === Difficulty.NORMAL) return true;
+
+        // Hard requires clearing Stage 30 Normal
+        if (diff === Difficulty.HARD) {
+            return getStageStars(30, Difficulty.NORMAL) > 0;
+        }
+
+        // Insane requires clearing Stage 30 Hard
+        if (diff === Difficulty.INSANE) {
+            return getStageStars(30, Difficulty.HARD) > 0;
+        }
+
+        return false;
+    }
+
+    private calculateStageCP(stage: StageDefinition, diffLevel: number): number {
+        let totalCP = 0;
+        stage.enemyIds.forEach(id => {
+            const def = ENEMY_DEFINITIONS.find(e => e.id === id);
+            if (def) {
+                // Get accurate stats for this level
+                const stats = getEnemyStatsForLevel(def, diffLevel);
+
+                // Calculate CP using same weights as Hero CP
+                const hpPower = stats.hp * 0.1;
+                const atkPower = stats.atk * 5;
+                const defPower = stats.def * 10;
+
+                // Estimate AS/Speed contribution (Enemies usually ~1.0 AS)
+                const aspdPower = (stats.speed || 1.0) * 1000;
+
+                // Level bonus
+                const levelPower = diffLevel * 20;
+
+                totalCP += (hpPower + atkPower + defPower + aspdPower + levelPower);
+            }
+        });
+        return Math.round(totalCP);
+    }
+
+    private formatNumber(num: number): string {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
     }
 
     private render() {
@@ -110,12 +239,25 @@ export class AdventureModal {
             <div class="adventure-modal">
                 <div class="modal-header">
                     <div class="modal-title">Jade Lotus Shrine</div>
-                    <button class="close-btn">✖</button>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="close-btn">✖</button>
+                    </div>
                 </div>
                 
                 <div class="modal-controls">
-                    <button class="drop-info-btn">Drop Info</button>
-                    <div class="difficulty-level">Difficulty: <span class="difficulty-val">Normal</span></div>
+                    <div class="difficulty-tabs">
+                        <button class="diff-tab ${this.currentDifficulty === Difficulty.NORMAL ? 'active' : ''}" data-diff="${Difficulty.NORMAL}">Normal</button>
+                        
+                        <button class="diff-tab ${this.currentDifficulty === Difficulty.HARD ? 'active' : ''} ${!this.isDifficultyUnlocked(Difficulty.HARD) ? 'disabled' : ''}" 
+                            data-diff="${Difficulty.HARD}">
+                            Hard ${!this.isDifficultyUnlocked(Difficulty.HARD) ? '🔒' : ''}
+                        </button>
+                        
+                        <button class="diff-tab ${this.currentDifficulty === Difficulty.INSANE ? 'active' : ''} ${!this.isDifficultyUnlocked(Difficulty.INSANE) ? 'disabled' : ''}" 
+                            data-diff="${Difficulty.INSANE}">
+                            Insane ${!this.isDifficultyUnlocked(Difficulty.INSANE) ? '🔒' : ''}
+                        </button>
+                    </div>
                 </div>
 
                 <div class="stage-list-container">
@@ -202,28 +344,31 @@ export class AdventureModal {
 
                 .modal-controls {
                     display: flex;
-                    justify-content: space-between;
+                    justify-content: center;
                     align-items: center;
                     padding: 10px 20px;
                     background: rgba(0,0,0,0.2);
                     border-bottom: 1px solid #444;
                 }
-                .drop-info-btn {
-                    background: #444;
-                    border: 1px solid #666;
-                    color: #ddd;
-                    padding: 5px 10px;
-                    border-radius: 4px;
-                    font-size: 0.9rem;
-                    cursor: pointer;
+                .difficulty-tabs { display: flex; gap: 5px; }
+                .diff-tab { 
+                    background: #2b1d0e; border: 1px solid #5c401a; color: #888; 
+                    padding: 5px 15px; border-radius: 4px 4px 0 0; cursor: pointer;
+                    border-bottom: none; position: relative; top: 1px;
                 }
-                .difficulty-level {
-                    color: #aaa;
-                    font-weight: bold;
+                .diff-tab.active { 
+                    background: #3e2b14; color: #ffd700; border-color: #ffd700; font-weight: bold;
+                    border-bottom: 2px solid #3e2b14; z-index: 2;
                 }
-                .difficulty-val {
-                    color: #4caf50; /* Green for Normal */
+                .diff-tab.disabled {
+                    opacity: 0.5; cursor: not-allowed; filter: grayscale(1);
                 }
+                .diff-tab.disabled:hover {
+                    background: #2b1d0e; color: #888;
+                }
+                .diff-tab:hover:not(.active):not(.disabled) { background: #3e2b14; color: #ccc; }
+                .star-rating { color: #555; font-size: 0.9rem; margin-left: 10px; }
+                .star-rating.earned { color: #ffd700; text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
 
                 .stage-list-container {
                     flex: 1;
@@ -302,6 +447,62 @@ export class AdventureModal {
                 .battle-btn:active {
                     transform: scale(0.95);
                 }
+                
+                .stage-center-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    flex: 1;
+                    margin: 0 15px;
+                }
+
+                .cp-badge {
+                    display: inline-block;
+                    background: rgba(220, 38, 38, 0.2);
+                    color: #f87171;
+                    border: 1px solid rgba(220, 38, 38, 0.4);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.75rem;
+                    margin-left: 8px;
+                    font-weight: bold;
+                }
+
+                .loot-container {
+                    display: flex;
+                    gap: 6px;
+                    flex-wrap: wrap; 
+                    max-width: 250px;
+                }
+                
+                .loot-icon-frame {
+                    width: 32px; height: 32px;
+                    background: #1a1a1a;
+                    border: 1px solid #444;
+                    border-radius: 6px;
+                    display: flex; justify-content: center; align-items: center;
+                }
+                
+                .loot-icon {
+                    width: 24px; height: 24px;
+                    object-fit: contain;
+                }
+                .loot-icon-frame {
+                    position: relative;
+                }
+                .loot-chance {
+                    position: absolute;
+                    bottom: -2px;
+                    right: -2px;
+                    background: rgba(0,0,0,0.8);
+                    color: #fff;
+                    font-size: 0.55rem;
+                    padding: 1px 2px;
+                    border-radius: 4px;
+                    border: 1px solid #555;
+                    font-weight: bold;
+                    pointer-events: none;
+                }
                 /* Custom Scrollbar */
                 .stage-list-container::-webkit-scrollbar {
                     width: 8px;
@@ -316,49 +517,140 @@ export class AdventureModal {
             </style>
         `;
 
-        // Render List
-        const listContainer = this.container.querySelector('.stage-list');
-        if (listContainer) {
-            JADE_LOTUS_SHRINE_STAGES.forEach(stage => {
-                const row = document.createElement('div');
-                row.className = 'stage-row';
+        // Bind Tab Events
+        this.container.querySelectorAll('.diff-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                const diff = target.dataset.diff as Difficulty;
 
-                // Get enemy icons using the helper function
-                const enemyIcons = getStageEnemyIcons(stage);
-                const enemiesHtml = enemyIcons.map(src => `<img src="${src}" class="enemy-icon" onerror="this.style.display='none'"/>`).join('');
-
-                const isLocked = stage.id > this.maxStage;
-
-                row.innerHTML = `
-                    <div class="stage-info">
-                        <div class="stage-name" style="${isLocked ? 'color:#888;' : ''}">${stage.name}</div>
-                        <div class="stage-details">Rec. Level: ${stage.recommendedLevel}</div>
-                    </div>
-                    <div class="stage-enemies" style="${isLocked ? 'opacity:0.3;' : ''}">
-                        ${enemiesHtml}
-                    </div>
-                    <button class="battle-btn" data-id="${stage.id}" ${isLocked ? 'disabled style="background:gray;cursor:not-allowed;box-shadow:none;border-color:#555;"' : ''}>
-                        ${isLocked ? '🔒 Locked' : '⚡ Battle'}
-                    </button>
-                `;
-
-                // Battle Click
-                const btn = row.querySelector('.battle-btn');
-                if (btn && !isLocked) {
-                    btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.startBattle(stage);
-                    });
+                // Unlock check
+                if (!this.isDifficultyUnlocked(diff)) {
+                    alert(`Complete Stage 30 on ${diff === Difficulty.HARD ? 'Normal' : 'Hard'} to unlock!`);
+                    return;
                 }
+                this.setDifficulty(diff);
 
-                listContainer.appendChild(row);
+                this.container.querySelectorAll('.diff-tab').forEach(b => b.classList.remove('active'));
+                target.classList.add('active');
             });
-        }
+        });
+
+        // Initial Render
+        this.renderStageList();
+
+
 
         // Close Event
         this.container.querySelector('.close-btn')?.addEventListener('click', () => {
             this.close();
         });
     }
-}
 
+    private setDifficulty(diff: Difficulty) {
+        this.currentDifficulty = diff;
+        this.renderStageList();
+    }
+
+    private renderStageList() {
+        const listContainer = this.container.querySelector('.stage-list');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+
+        JADE_LOTUS_SHRINE_STAGES.forEach(stage => {
+            const row = document.createElement('div');
+            row.className = 'stage-row';
+
+            // Stars
+            const stars = getStageStars(stage.id, this.currentDifficulty);
+            const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+
+            // Lock Logic
+            let isLocked = false;
+            // Normal: stage.id > maxStage
+            // Hard: Normal cleared (3 stars)
+            // Insane: Hard cleared (3 stars)
+
+            // Wait, "Clear First Normal with perfect star Before unlocking Hard".
+            // So to play Hard Stage 1, you need Normal Stage 1 3-stars.
+            // AND (presumably) Hard Stage 1 unlocked by progress? 
+            // Usually Difficulty unlock is global or per-stage. The prompt implies per-stage or global?
+            // "Clear First Normal with perfect star Before unlocking Hard". 
+            // Let's assume Per-Stage: Hard 1-1 requires Normal 1-1 3-Stars.
+
+            if (this.currentDifficulty === Difficulty.NORMAL) {
+                isLocked = stage.id > this.maxStage;
+            } else if (this.currentDifficulty === Difficulty.HARD) {
+                const normalStars = getStageStars(stage.id, Difficulty.NORMAL);
+                isLocked = normalStars < 3;
+            } else if (this.currentDifficulty === Difficulty.INSANE) {
+                const hardStars = getStageStars(stage.id, Difficulty.HARD);
+                isLocked = hardStars < 3;
+            }
+
+            // Difficulty Scaling
+            let level = stage.recommendedLevel;
+            // let cpMult = 1; // Removed simple multiplier
+            if (this.currentDifficulty === Difficulty.HARD) { level = Math.floor(level * 1.5 + 5); }
+            if (this.currentDifficulty === Difficulty.INSANE) { level = Math.floor(level * 2 + 15); }
+
+            const stageCP = this.calculateStageCP(stage, level);
+
+            // Get enemy icons
+            const enemyIcons = getStageEnemyIcons(stage);
+            const enemiesHtml = enemyIcons.map(src => `<img src="${src}" class="enemy-icon" onerror="this.style.display='none'"/>`).join('');
+
+            // Loot Icons
+            const potentialDrops = getPossibleRewards(1, stage.id, this.currentDifficulty.toLowerCase() as 'normal' | 'hard' | 'insane');
+            const lootHtml = potentialDrops.map(reward => `
+                <div class="loot-icon-frame" title="${reward.name} (${reward.chance}%)">
+                    <img src="${reward.icon}" class="loot-icon" onerror="this.style.display='none'"/>
+                    <span class="loot-chance">${reward.chance}%</span>
+                </div>
+            `).join('');
+
+            // Add previous stage check for Hard/Insane
+            if (!isLocked && this.currentDifficulty !== Difficulty.NORMAL && stage.id > 1) {
+                // Also require previous stage on SAME difficulty to be cleared (at least 1 star)
+                const prevStars = getStageStars(stage.id - 1, this.currentDifficulty);
+                if (prevStars < 1) isLocked = true;
+            }
+
+            row.innerHTML = `
+                    <div class="stage-info">
+                        <div class="stage-name" style="${isLocked ? 'color:#888;' : ''}">
+                            ${stage.name}
+                            <span class="star-rating ${stars > 0 ? 'earned' : ''}">${starStr}</span>
+                        </div>
+                        <div class="stage-details">
+                            Rec. Level: ${level} 
+                            <span class="cp-badge">⚔️ ${this.formatNumber(stageCP)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-center-content">
+                        <div class="loot-container" style="${isLocked ? 'opacity:0.3;' : ''}">
+                             ${lootHtml}
+                        </div>
+                        <div class="stage-enemies" style="${isLocked ? 'opacity:0.3;' : ''}">
+                            ${enemiesHtml}
+                        </div>
+                    </div>
+
+                    ${isLocked ?
+                    `<button class="battle-btn locked" disabled style="background:#333; border-color:#555; color:#888; cursor:not-allowed; box-shadow:none;">🔒 Locked</button>` :
+                    `<button class="battle-btn" data-id="${stage.id}">⚡ Battle</button>`
+                }
+                `;
+
+            const btn = row.querySelector('.battle-btn');
+            if (btn && !isLocked) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.startBattle(stage, this.currentDifficulty);
+                });
+            }
+
+            listContainer.appendChild(row);
+        });
+    }
+}

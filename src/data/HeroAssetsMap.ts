@@ -6,6 +6,7 @@ export interface HeroSpriteConfig {
     framesPerRow: number;          // Frames per row in spritesheet
     totalFrames: number;           // Total number of frames
     fps?: number;                  // Frames per second (default 12)
+    animations?: Record<string, { frames: number }>; // Override frames per animation type
 }
 
 export interface HeroAssetConfig {
@@ -30,7 +31,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,       // 2560 / 512 = 5 columns
             totalFrames: 48,       // Actual animation frames
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 8 },  // Adjusted based on file size ~300KB
+                dead: { frames: 28 },
+                skill1: { frames: 20 },
+                skill2: { frames: 40 }
+            }
         }
     },
     {
@@ -42,7 +49,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,
             totalFrames: 48,
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 8 },
+                dead: { frames: 28 },
+                skill1: { frames: 20 },
+                skill2: { frames: 40 }
+            }
         }
     },
     {
@@ -54,7 +67,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,
             totalFrames: 48,
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 7 },
+                dead: { frames: 36 },
+                skill1: { frames: 34 },
+                skill2: { frames: 44 }
+            }
         }
     },
     {
@@ -66,7 +85,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,
             totalFrames: 48,
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 7 },
+                dead: { frames: 36 },
+                skill1: { frames: 34 },
+                skill2: { frames: 44 }
+            }
         }
     },
     {
@@ -78,7 +103,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,
             totalFrames: 48,
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 12 }, // Adjusted to match enemy logic (15 slots - 3 blanks)
+                dead: { frames: 48 },
+                skill1: { frames: 24 },
+                skill2: { frames: 48 }
+            }
         }
     },
     {
@@ -90,7 +121,13 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
             frameHeight: 512,
             framesPerRow: 5,
             totalFrames: 48,
-            fps: 24
+            fps: 24,
+            animations: {
+                hit1: { frames: 12 },
+                dead: { frames: 48 },
+                skill1: { frames: 24 },
+                skill2: { frames: 48 }
+            }
         }
     }
 ];
