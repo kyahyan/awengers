@@ -1,5 +1,5 @@
 import { HeroAssetConfig } from '../data/HeroAssetsMap';
-import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition, SkillRank } from '../data/HeroProgression';
+import { createOryxHero, createSableHero, createRazorHero, createTauronHero, createBarrukHero, HeroProgressionManager, SkillDefinition } from '../data/HeroProgression';
 import { BattleArenaUI } from './BattleArenaUI';
 
 export class GalleryHeroModal {
@@ -47,6 +47,24 @@ export class GalleryHeroModal {
                 'blood_scent': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
                 'guillotine_breaker': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
             };
+        } else if (heroNameLower.includes('tauron')) {
+            // Tauron - Bull Mage
+            this.heroManager = createTauronHero(heroLevel);
+            this.skillIconPaths = {
+                'spirit_bolt': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Spirit Bolt.png',
+                'ancestral_ward': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Ancestral Ward.png',
+                'mystic_hide': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Mystic Hide.png',
+                'stampede_of_souls': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Stampede of Souls.png'
+            };
+        } else if (heroNameLower.includes('barruk')) {
+            // Barruk - Bull Ranger
+            this.heroManager = createBarrukHero(heroLevel);
+            this.skillIconPaths = {
+                'heavy_bolt': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Heavy Bolt.png',
+                'explosive_bolas': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Explosive Bolas.png',
+                'big_game_hunter': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Big Game Hunter.png',
+                'siege_mode': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Siege Mode.png'
+            };
         } else {
             // Default: Oryx - Antelope Mage
             this.heroManager = createOryxHero(heroLevel);
@@ -76,6 +94,10 @@ export class GalleryHeroModal {
         } else if (heroNameLower.includes('razor')) {
             heroBasePath = '/assets/Character/heroes/boar_assassin_with_animation_spritesheets';
             spriteFilename = 'Armature_Armature_idle_Base_Layer_001_spritesheet.png';
+        } else if (heroNameLower.includes('tauron')) {
+            heroBasePath = '/assets/Character/heroes/bull_mage_with_animation_spritesheets';
+        } else if (heroNameLower.includes('barruk')) {
+            heroBasePath = '/assets/Character/heroes/bull_ranger_with_animation_spritesheets';
         }
 
         // Front-view idle spritesheet config
@@ -457,8 +479,6 @@ export class GalleryHeroModal {
         `;
 
         skills.forEach(skill => {
-            const currentRankIndex = this.getCurrentRankIndex(skill, heroLevel);
-
             const typeColors: Record<string, { bg: string; border: string; badge: string }> = {
                 'active': { bg: 'rgba(249, 115, 22, 0.3)', border: '#f97316', badge: '#f97316' },
                 'passive': { bg: 'rgba(34, 197, 94, 0.3)', border: '#22c55e', badge: '#22c55e' },
@@ -757,15 +777,27 @@ export class GalleryHeroModal {
         const assetName = this.heroAssetName;
 
         // Mock Team: Single Hero at max level
+        const stats = this.heroManager.getStats(250);
+        const skills = this.heroManager.getSkills();
+
         const heroTeam = [{
             name: assetName,
             level: 250,
             instanceId: 'demo_hero',
-            stars: 5
+            stars: 5,
+            stats: {
+                hp: stats.hp,
+                atk: stats.atk,
+                def: stats.armor, // Map armor to def
+                speed: stats.aspd, // Map aspd to speed
+                crit: '25%'
+            },
+            skills: skills,
+            moveSpeed: stats.moveSpeed
         }];
 
         // Mock Enemy for Demo
-        const enemyIds = ['boar_elite'];
+        const enemyIds = ['dummy_target', 'dummy_target', 'dummy_target', 'dummy_target', 'dummy_target', 'dummy_target'];
 
         const battleArena = new BattleArenaUI(
             heroTeam,
@@ -773,7 +805,7 @@ export class GalleryHeroModal {
                 // onClose
                 battleArena.getElement().remove();
             },
-            (result) => {
+            (_result) => {
                 // onBattleEnd
                 battleArena.close();
             },

@@ -11,7 +11,7 @@ const ANIM_FRAMES: Record<string, number> = {
 
 // Enemy animation mapping
 const ENEMY_ANIM_MAP: Record<string, string> = {
-    idle: 'idle', skill1: 'attack', skill2: 'attack', hit1: 'hit', dead: 'dead', dizzy: 'hit'
+    idle: 'idle', skill1: 'attack', skill2: 'attack', hit1: 'hit', dead: 'dead', dizzy: 'dizzy'
 };
 
 // Map file assets to new Hero IDs
@@ -19,7 +19,9 @@ const ASSET_TO_HERO_ID: Record<string, string> = {
     'Antelope Mage': 'oryx_mage',
     'Antelope Ranger': 'sable_ranger',
     'Razor': 'razor_assassin',
-    'Razor Left': 'razor_assassin'
+    'Razor Left': 'razor_assassin',
+    'Bull Mage': 'tauron_mage',
+    'Bull Mage Left': 'tauron_mage'
 };
 
 const HERO_DATA: Record<string, any> = {
@@ -31,12 +33,46 @@ const HERO_DATA: Record<string, any> = {
             250: { hp: 145000, atk: 13000, def: 1200, speed: 1.8, crit: '25%' }
         },
         skills: [
-            { name: "Horn Bolt", type: "Active", desc: "Lvl 81: Silence (1.5s). Lvl 221: Pierce." },
-            { name: "Static Hooves", type: "Passive", desc: "Charge on Move. Lvl 20: Bounce 2. Lvl 201: Bounce 3." },
-            { name: "Astral Leap", type: "Active", desc: "Teleport. Lvl 241: Stun Trap (1.5s)." },
-            { name: "Nature's Wrath", type: "Ultimate", desc: "AOE Nuke. Lvl 250: Instant Cast." }
+            {
+                id: "skill_1",
+                name: "Horn Bolt",
+                ranks: [
+                    { lvl: 1, desc: "150% Dmg, 9s CD" },
+                    { lvl: 81, desc: "180% Dmg, Silence 1.5s" },
+                    { lvl: 161, desc: "220% Dmg" },
+                    { lvl: 221, desc: "Pierce Effect (Hits 2 targets)" }
+                ]
+            },
+            {
+                id: "skill_2",
+                name: "Astral Leap",
+                ranks: [
+                    { lvl: 10, desc: "Teleport + 20% Speed, 15s CD" },
+                    { lvl: 101, desc: "30% Speed, 12s CD" },
+                    { lvl: 181, desc: "10s CD" },
+                    { lvl: 241, desc: "Leaves Stun Trap (1.5s)" }
+                ]
+            },
+            {
+                id: "passive",
+                name: "Static Hooves",
+                ranks: [
+                    { lvl: 20, desc: "100 Steps = Bounce 2 Targets (80% Dmg)" },
+                    { lvl: 121, desc: "80 Steps to Charge" },
+                    { lvl: 201, desc: "Bounce 3 Targets (100% Dmg)" }
+                ]
+            },
+            {
+                id: "ultimate",
+                name: "Nature's Wrath",
+                ranks: [
+                    { lvl: 40, desc: "400% AOE Dmg, 1.5s Cast" },
+                    { lvl: 141, desc: "600% AOE Dmg, 1.0s Cast" },
+                    { lvl: 250, desc: "800% AOE Dmg, Instant Cast" }
+                ]
+            }
         ],
-        skillIcons: ['Horn Bolt.png', 'Static Hooves.png', 'Astral Leap.png', "Nature's Wrath.png"]
+        skillIcons: ['Horn Bolt.png', 'Astral Leap.png', 'Static Hooves.png', "Nature's Wrath.png"]
     },
     'sable_ranger': {
         name: "Sable", title: "The Velocity", role: "Sustained DPS", class: 'Ranger', type: 'Agility', icon: '/assets/attr/boots.png',
@@ -46,10 +82,44 @@ const HERO_DATA: Record<string, any> = {
             250: { hp: 165000, atk: 11200, def: 2400, speed: 2.8, crit: '35%' }
         },
         skills: [
-            { name: "Wind-Piercer", type: "Active", desc: "Lvl 221: +30% Crit." },
-            { name: "Back-Kick Vault", type: "Active", desc: "Kick + Jump. Lvl 241: Stun (2s)." },
-            { name: "Hunter's Mark", type: "Passive", desc: "Stack Dmg. Lvl 201: Max 10 Stacks." },
-            { name: "Spirit Barrage", type: "Ultimate", desc: "Rapid Fire. Lvl 250: 20 Arrows." }
+            {
+                id: "skill_1",
+                name: "Wind-Piercer",
+                ranks: [
+                    { lvl: 1, desc: "140% Dmg, 8s CD" },
+                    { lvl: 81, desc: "170% Dmg" },
+                    { lvl: 161, desc: "200% Dmg, 7s CD" },
+                    { lvl: 221, desc: "+30% Crit Rate" }
+                ]
+            },
+            {
+                id: "skill_2",
+                name: "Back-Kick Vault",
+                ranks: [
+                    { lvl: 10, desc: "100% Dmg + Jump Back, 12s CD" },
+                    { lvl: 101, desc: "Double Knockback Distance" },
+                    { lvl: 181, desc: "9s CD" },
+                    { lvl: 241, desc: "Stuns Target for 2.0s" }
+                ]
+            },
+            {
+                id: "passive",
+                name: "Hunter's Mark",
+                ranks: [
+                    { lvl: 20, desc: "+3% Dmg per Stack (Max 5)" },
+                    { lvl: 121, desc: "+5% Dmg per Stack" },
+                    { lvl: 201, desc: "Max 10 Stacks (Total 50% Bonus)" }
+                ]
+            },
+            {
+                id: "ultimate",
+                name: "Spirit Barrage",
+                ranks: [
+                    { lvl: 40, desc: "10 Arrows (400% Total Dmg)" },
+                    { lvl: 141, desc: "15 Arrows (600% Total Dmg)" },
+                    { lvl: 250, desc: "20 Arrows (800% Total Dmg), Auto-Target" }
+                ]
+            }
         ],
         skillIcons: ['Wind-Piercer.png', 'Back-Kick Vault.png', "Hunter's Mark.png", 'Spirit Barrage.png']
     },
@@ -67,6 +137,55 @@ const HERO_DATA: Record<string, any> = {
             { name: "Guillotine Breaker", type: "Ultimate", desc: "True Dmg. Lvl 250: Reset on Kill." }
         ],
         skillIcons: ['Tusk Gore.png', 'Wild Charge.png', 'Blood Scent.png', 'Guillotine Breaker.png']
+    },
+    'tauron_mage': {
+        name: "Tauron", title: "The Earthseer", role: "Battle Mage", class: 'Mage', type: 'Intelligence', icon: '/assets/attr/attack.png',
+        statLevels: {
+            1: { hp: 600, atk: 38, def: 8, speed: 0.7, crit: '5%' },
+            100: { hp: 16000, atk: 900, def: 150, speed: 0.9, crit: '12%' },
+            250: { hp: 180000, atk: 12000, def: 3000, speed: 1.5, crit: '20%' }
+        },
+        skills: [
+            {
+                id: "skill_1",
+                name: "Spirit Bolt",
+                ranks: [
+                    { lvl: 1, desc: "140% Mag Dmg + Knockback" },
+                    { lvl: 81, desc: "180% Mag Dmg" },
+                    { lvl: 161, desc: "Gain Splash Damage" },
+                    { lvl: 221, desc: "Restore 5% MP on hit" }
+                ]
+            },
+            {
+                id: "skill_2",
+                name: "Ancestral Ward",
+                ranks: [
+                    { lvl: 10, desc: "AOE Dmg + Slow (3s), 12s CD" },
+                    { lvl: 101, desc: "Gain +20% Def Buff (5s)" },
+                    { lvl: 181, desc: "8s CD" },
+                    { lvl: 241, desc: "Effect changes to Immobilize (2s)" }
+                ]
+            },
+            {
+                id: "passive",
+                name: "Mystic Hide",
+                ranks: [
+                    { lvl: 20, desc: "Convert 15% Magic Atk to Phys Def" },
+                    { lvl: 121, desc: "Convert 25% Magic Atk to Phys Def" },
+                    { lvl: 201, desc: "On Cast: Gain Shield (3s)" }
+                ]
+            },
+            {
+                id: "ultimate",
+                name: "Stampede of Souls",
+                ranks: [
+                    { lvl: 40, desc: "400% AOE Dmg + Stun (1.5s)" },
+                    { lvl: 141, desc: "600% AOE Dmg" },
+                    { lvl: 250, desc: "Leave Burning Ground (5s)" }
+                ]
+            }
+        ],
+        skillIcons: ['Spirit Bolt.png', 'Ancestral Ward.png', 'Mystic Hide.png', 'Stampede of Souls.png']
     }
 };
 
@@ -101,7 +220,7 @@ function getStatsForLevel(heroId: string, level: number) {
 
 interface StatusEffect {
     id: string;
-    type: 'stun' | 'buff_atk' | 'buff_def' | 'buff_speed' | 'dot' | 'mark' | 'silence' | 'shield';
+    type: 'stun' | 'buff_atk' | 'buff_def' | 'buff_speed' | 'dot' | 'mark' | 'silence' | 'shield' | 'slow' | 'immobilize' | 'burning';
     name: string;
     duration: number; // turns
     value: number; // multiplier or flat value
@@ -120,6 +239,7 @@ interface BattleEntity {
     id: string; name: string; maxHp: number; hp: number; level: number;
     element: HTMLElement; spriteEl: HTMLElement;
     hpBarFill: HTMLElement; apBarFill: HTMLElement; statusContainer: HTMLElement;
+    shieldBarFill: HTMLElement; shieldBarTrack: HTMLElement; // Shield bar elements
     baseConfig: HeroSpriteConfig; isDead: boolean;
     cooldowns: { skill1: number; skill2: number; skill3: number; ult: number; };
     currentAnim: string; animFrame: number; animTimestamp: number; animReqId: number | null;
@@ -362,13 +482,9 @@ export class BattleArenaUI {
             this.container.appendChild(this.arenaScreen);
 
             const battleContainer = document.createElement('div');
-            battleContainer.style.cssText = `position: relative; width: 100%; height: 100%; z-index: 1;`;
-            battleContainer.onclick = (e) => {
-                if (this.activeTooltip && !(e.target as HTMLElement).closest('.hud-btn')) {
-                    this.activeTooltip.remove(); this.activeTooltip = null;
-                }
-            };
-            this.arenaScreen.appendChild(battleContainer); // Make sure to append it!
+            battleContainer.style.cssText = `position: relative; width: 100%; height: 100%; z-index: 1; pointer-events: none;`;
+            // Click listener removed to ensure pass-through
+            this.arenaScreen.appendChild(battleContainer);
 
             // Create Heroes
             this.heroes = [];
@@ -460,9 +576,6 @@ export class BattleArenaUI {
             });
 
             if (this.heroes.length > 0) {
-                // Fix: Attach HUD to root container to ensure it's on top of everything
-                this.createHUD(this.container);
-
                 this.lastTick = performance.now();
                 this.battleLoopId = requestAnimationFrame((t) => this.gameLoop(t));
             }
@@ -501,7 +614,7 @@ export class BattleArenaUI {
             .data-btn { position: absolute; top: 30px; left: 30px; width: 50px; height: 50px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 2px solid #8b6914; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 100; transition: all 0.2s; }
             .data-btn:hover { background: rgba(139, 105, 20, 0.5); transform: scale(1.1); }
         `;
-            // this.container.appendChild(this.arenaScreen); // Already appended at start
+            this.createHUD(this.arenaScreen);
             this.createDamageStatsOverlay(this.arenaScreen);
             console.log('[BattleArenaUI] showArena completed successfully');
         } catch (e) {
@@ -617,7 +730,135 @@ export class BattleArenaUI {
         barFill.className = 'dmg-bar-fill';
         barFill.style.cssText = `width: 0%; height: 100%; background: ${side === 'left' ? '#fbbf24' : '#f87171'}; transition: width 0.3s;`;
         barTrack.appendChild(barFill);
-        info.appendChild(barTrack);
+        if (entity.skills && entity.skills.length > 0 && side === 'left') {
+            const skillRow = document.createElement('div');
+            skillRow.className = 'skill-row';
+            skillRow.style.cssText = `display: flex; gap: 4px; margin-top: 4px;`;
+
+            // Map common fallback icons if paths are missing
+            const tempIcons = ['/assets/icons/skill1.png', '/assets/icons/skill2.png', '/assets/icons/skill3.png', '/assets/icons/ult.png'];
+
+            entity.skills.forEach((skill: any, i) => {
+                const iconContainer = document.createElement('div');
+                iconContainer.className = `skill-icon-container skill-idx-${i}`;
+                iconContainer.style.cssText = `
+                    width: 24px; height: 24px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); 
+                    background: #222; overflow: hidden; position: relative; cursor: pointer; pointer-events: auto;
+                `;
+
+                // Try to find icon path
+                let iconPath = '';
+                // 1. Check if heroData has explicit skillIcons (from BattleEntity creation)
+                if (entity.skillIcons && entity.skillIcons[i]) {
+                    // Path logic similar to preloadAssets:
+                    if (entity.baseConfig && entity.baseConfig.spritesheetPath) {
+                        const path = entity.baseConfig.spritesheetPath;
+                        const parts = path.split('/');
+                        // Remove filename and view folder to get hero root
+                        // e.g. .../heroes/bull_mage_with_animation/side-left/sheet.png -> .../heroes/bull_mage_with_animation/skills/Icon.png
+                        // We need to go up 2 levels usually (from side-left/sheet)
+                        const viewIndex = parts.findIndex(p => p.includes('side-') || p.includes('iso-'));
+                        if (viewIndex > 0) {
+                            const heroRoot = parts.slice(0, viewIndex).join('/');
+                            iconPath = `${heroRoot}/skills/${entity.skillIcons[i]}`;
+                        } else {
+                            // Fallback
+                            iconPath = tempIcons[i] || '';
+                        }
+                    }
+                } else if (skill.icon && skill.icon.length > 2) {
+                    // If skill object has full path or emoji? Emoji length is small. 
+                    // Assuming emoji for now if not path
+                    iconPath = '';
+                }
+
+                if (iconPath) {
+                    const img = document.createElement('img');
+                    img.src = iconPath;
+                    img.style.cssText = `width: 100%; height: 100%; object-fit: cover;`;
+                    iconContainer.appendChild(img);
+                } else {
+                    iconContainer.innerText = skill.icon || (i + 1).toString();
+                    iconContainer.style.display = 'flex';
+                    iconContainer.style.justifyContent = 'center';
+                    iconContainer.style.alignItems = 'center';
+                    iconContainer.style.fontSize = '12px';
+                }
+
+                // Cooldown Overlay
+                const cdOverlay = document.createElement('div');
+                cdOverlay.className = 'cd-overlay';
+                cdOverlay.style.cssText = `
+                    position: absolute; inset: 0; background: rgba(0,0,0,0.7); 
+                    display: flex; justify-content: center; align-items: center;
+                    color: #fff; font-weight: bold; font-size: 10px; opacity: 0; pointer-events: none;
+                `;
+                iconContainer.appendChild(cdOverlay);
+
+                // Tooltip
+                iconContainer.onclick = (e) => {
+                    e.stopPropagation();
+                    if (this.activeTooltip) this.activeTooltip.remove();
+
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'skill-tooltip';
+                    tooltip.style.cssText = `
+                        position: fixed; left: ${e.clientX + 10}px; top: ${e.clientY + 10}px;
+                        background: rgba(10,10,15,0.95); border: 1px solid #444; border-radius: 8px;
+                        padding: 12px; z-index: 5000; max-width: 250px; pointer-events: none;
+                        font-family: 'SF Pro Display';
+                    `;
+                    // Find current rank based on level
+                    let currentRank = skill.ranks ? skill.ranks[0] : null;
+                    if (skill.ranks) {
+                        for (let r = 0; r < skill.ranks.length; r++) {
+                            if (skill.ranks[r].unlockLevel <= entity.level) {
+                                currentRank = skill.ranks[r];
+                            }
+                        }
+                    }
+
+                    let detailsHtml = '';
+                    if (currentRank) {
+                        detailsHtml = `
+                            <div style="font-size: 0.85rem; color: #ddd; margin-bottom: 8px; line-height: 1.3;">${currentRank.description}</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.75rem; color: #9ca3af; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
+                                ${currentRank.damagePercent ? `<div>Dmg: <span style="color:#ef4444; font-weight:bold;">${currentRank.damagePercent}%</span></div>` : ''}
+                                ${currentRank.cooldown ? `<div>CD: <span style="color:#fbbf24; font-weight:bold;">${currentRank.cooldown}s</span></div>` : ''}
+                                ${currentRank.effect ? `<div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.1); paddingTop: 4px; marginTop: 2px;">Effect: <span style="color:#60a5fa">${currentRank.effect}</span></div>` : ''}
+                            </div>
+                        `;
+                    } else {
+                        detailsHtml = `<div style="font-size: 0.85rem; color: #ccc;">${skill.description || 'No description.'}</div>`;
+                    }
+
+                    tooltip.innerHTML = `
+                        <div style="color: #fbbf24; font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>${skill.name}</span>
+                            <span style="font-size: 0.7em; color: #666; font-weight: normal; background: #222; padding: 2px 6px; border-radius: 4px;">Lvl ${entity.level}</span>
+                        </div>
+                        ${detailsHtml}
+                        <div style="font-size: 0.7rem; color: #555; margin-top: 8px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">
+                            ${skill.type}
+                        </div>
+                    `;
+                    document.body.appendChild(tooltip);
+                    this.activeTooltip = tooltip;
+
+                    // Auto-remove after time or click elsewhere (handled by container click)
+                    setTimeout(() => tooltip.remove(), 4000);
+                };
+
+                skillRow.appendChild(iconContainer);
+            });
+            info.appendChild(skillRow);
+        }
+
+        // Status Effects Row (Buffs/Debuffs)
+        const statusRow = document.createElement('div');
+        statusRow.className = 'status-effects-row';
+        statusRow.style.cssText = `display: flex; gap: 2px; margin-top: 2px; min-height: 16px; flex-wrap: wrap;`;
+        info.appendChild(statusRow);
 
         card.appendChild(portrait);
         card.appendChild(info);
@@ -658,6 +899,98 @@ export class BattleArenaUI {
                 // Grey out if dead
                 if (entity.isDead) card.style.opacity = '0.5';
                 else card.style.opacity = '1';
+
+                // Update Skill Cooldowns
+                if (side === 'left' && entity.skills) {
+                    const cds = [entity.cooldowns.skill1, entity.cooldowns.skill2, entity.cooldowns.skill3, entity.cooldowns.ult];
+                    entity.skills.forEach((_, i) => {
+                        const iconContainer = card.querySelector(`.skill-idx-${i}`);
+                        if (iconContainer) {
+                            const overlay = iconContainer.querySelector('.cd-overlay') as HTMLElement;
+                            const cd = cds[i];
+                            if (overlay) {
+                                if (cd > 0) {
+                                    overlay.style.opacity = '1';
+                                    overlay.innerText = cd.toString();
+                                    (iconContainer as HTMLElement).style.filter = 'grayscale(1)';
+                                    (iconContainer as HTMLElement).style.borderColor = '#555';
+                                } else {
+                                    overlay.style.opacity = '0';
+                                    (iconContainer as HTMLElement).style.filter = 'none';
+                                    (iconContainer as HTMLElement).style.borderColor = 'rgba(255,255,255,0.2)';
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Update Status Effects
+                const statusRow = card.querySelector('.status-effects-row');
+                if (statusRow) {
+                    const existingIcons = Array.from(statusRow.children) as HTMLElement[];
+                    const currentEffects = (entity.effects || []).map((e, idx) => ({ ...e, tempId: e.id || `${e.type}-${idx}` }));
+
+                    // Remove stale
+                    existingIcons.forEach(icon => {
+                        const iconId = icon.getAttribute('data-id');
+                        if (!currentEffects.find(e => e.tempId === iconId)) icon.remove();
+                    });
+
+                    // Add/Update
+                    currentEffects.forEach(effect => {
+                        let icon = statusRow.querySelector(`[data-id="${effect.tempId}"]`) as HTMLElement;
+                        if (!icon) {
+                            icon = document.createElement('div');
+                            icon.setAttribute('data-id', effect.tempId);
+                            icon.style.cssText = `
+                                width: 16px; height: 16px; border-radius: 50%;
+                                background-size: cover; background-position: center;
+                                border: 1px solid rgba(255,255,255,0.8); cursor: pointer; position: relative;
+                                pointer-events: auto; flex-shrink: 0;
+                            `;
+                            // Visuals
+                            if (effect.icon) {
+                                icon.style.backgroundImage = `url('${effect.icon}')`;
+                            } else {
+                                switch (effect.type) {
+                                    case 'stun': icon.style.background = '#fbbf24'; icon.innerText = '⚡'; break;
+                                    case 'buff_atk': icon.style.background = '#ef4444'; icon.innerText = '⚔️'; break;
+                                    case 'buff_def': icon.style.background = '#3b82f6'; icon.innerText = '🛡️'; break;
+                                    case 'dot': icon.style.background = '#8b5cf6'; icon.innerText = '☠️'; break;
+                                    default: icon.style.background = '#666'; icon.innerText = '?'; break;
+                                }
+                                if (!effect.icon) {
+                                    icon.style.display = 'flex'; icon.style.justifyContent = 'center'; icon.style.alignItems = 'center'; icon.style.fontSize = '10px';
+                                }
+                            }
+
+                            // Tooltip
+                            icon.onclick = (e) => {
+                                e.stopPropagation();
+                                if (this.activeTooltip) this.activeTooltip.remove();
+                                const tooltip = document.createElement('div');
+                                tooltip.className = 'effect-tooltip';
+                                tooltip.style.cssText = `
+                                    position: fixed; left: ${e.clientX + 10}px; top: ${e.clientY + 10}px;
+                                    background: rgba(10,10,15,0.95); border: 1px solid #444; border-radius: 6px;
+                                    padding: 8px; z-index: 5000; min-width: 150px; pointer-events: none;
+                                    font-family: 'SF Pro Display'; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+                                `;
+                                const tColor = effect.type === 'stun' ? '#fbbf24' : '#fff';
+                                tooltip.innerHTML = `
+                                    <div style="color: ${tColor}; font-weight: bold; font-size: 0.85rem; margin-bottom: 2px;">${effect.name}</div>
+                                    <div style="font-size: 0.75rem; color: #ccc;">${effect.type}</div>
+                                    <div style="margin-top: 4px; font-size: 0.7rem;">Duration: ${effect.duration}</div>
+                                `;
+                                document.body.appendChild(tooltip);
+                                this.activeTooltip = tooltip;
+                                setTimeout(() => tooltip.remove(), 2500);
+                            };
+                            statusRow.appendChild(icon);
+                        }
+                    });
+                }
+
             });
         };
 
@@ -732,23 +1065,28 @@ export class BattleArenaUI {
         // Current architecture uses turns for duration. Real-time is okay too.
         // Actually, let's keep it simple: DoT damage happens in tickEntity periodically
         if (Math.random() < 0.05) { // Occasional tick
-            const dots = entity.effects.filter(e => e.type === 'dot');
+            const dots = entity.effects.filter(e => e.type === 'dot' || e.type === 'burning');
             if (dots.length > 0) {
                 let dmg = 0;
-                dots.forEach(_ => dmg += Math.floor(entity.maxHp * 0.01)); // 1% Max HP tick
+                dots.forEach(d => {
+                    // Bleed: 1% Max HP. Burning: 2% Max HP
+                    const tickDmg = d.type === 'burning' ? Math.floor(entity.maxHp * 0.02) : Math.floor(entity.maxHp * 0.01);
+                    dmg += tickDmg;
+                });
                 if (dmg > 0) {
                     entity.hp = Math.max(0, entity.hp - dmg);
                     entity.hpBarFill.style.width = `${(entity.hp / entity.maxHp) * 100}%`;
-                    this.showFloatingText(entity.element, `-${dmg}`, false);
-                    if (entity.hp <= 0 && !entity.isDead) this.handleDeath(entity); // Suicide by bleed
+                    this.showFloatingText(entity.element, `🔥 -${dmg}`, false);
+                    if (entity.hp <= 0 && !entity.isDead) this.handleDeath(entity); // Suicide by bleed/burn
                 }
             }
         }
 
         // Mage Passive - Static Hooves
         if (entity.heroId === 'oryx_mage' && entity.passiveCharges < 100) {
-            // Lvl 121+: 80 steps to charge (so fill faster)
-            const chargeRate = entity.level >= 121 ? 2.5 : 2.0;
+            // Lvl 121+: 80 steps to charge. Scale "Steps" so 100 steps ~ 3-4 turns.
+            // Reduced rate significantly to prevent instant charging.
+            const chargeRate = entity.level >= 121 ? 0.2 : 0.15;
             entity.passiveCharges += (baseTick * chargeRate);
         }
 
@@ -761,11 +1099,20 @@ export class BattleArenaUI {
 
         entity.ap = Math.min(MAX_AP, entity.ap + gain);
         const pct = (entity.ap / MAX_AP) * 100;
-        entity.apBarFill.style.width = `${pct}%`;
+        entity.apBarFill.style.width = `${pct}% `;
         entity.apBarFill.style.background = entity.ap >= MAX_AP ? '#ffffff' : '#fbbf24';
     }
 
     private takeTurn(actor: BattleEntity, target: BattleEntity) {
+        // Dummy target Logic: Skip turn
+        if (actor.id === 'dummy_target' || actor.name === 'Target Dummy') {
+            // Reset AP so it doesn't get stuck in loop
+            actor.ap = 0;
+            actor.apBarFill.style.width = '0%';
+            // Maybe play idle anim to reset state?
+            return;
+        }
+
         const isStunned = actor.effects.some(e => e.type === 'stun');
         if (isStunned) {
             this.showFloatingText(actor.element, "STUNNED!", true);
@@ -780,8 +1127,16 @@ export class BattleArenaUI {
         }
 
         this.isAnimatingAction = true; actor.ap = 0; actor.apBarFill.style.width = '0%';
-        this.updateEffects(actor);
+
+        // Passive: Static Hooves Charging
+        if (actor.heroId === 'oryx_mage') {
+            actor.passiveCharges = (actor.passiveCharges || 0) + 10;
+        }
+
+        // Check Silence BEFORE decrementing duration
         const isSilenced = actor.effects.some(e => e.type === 'silence');
+
+        this.updateEffects(actor);
 
         if (actor.cooldowns.skill1 > 0) actor.cooldowns.skill1--;
         if (actor.cooldowns.skill2 > 0) actor.cooldowns.skill2--;
@@ -802,66 +1157,216 @@ export class BattleArenaUI {
         // --- SKILL SELECTION & LOGIC ---
         if (!isSilenced && actor.cooldowns.ult === 0 && Math.random() > 0.6) {
             // ULTIMATE
-            animType = 'skill2'; actor.cooldowns.ult = 5;
+            animType = 'skill2';
+            actor.cooldowns.ult = 5;
             skillName = skills[3]?.name || 'Ultimate';
+
             if (actor.heroId === 'oryx_mage') {
-                // Nature's Wrath: 400% -> 600% -> 800%
+                // Nature's Wrath
+                // Lvl 40: 400% AOE, 1.5s Cast
+                // Lvl 141: 600% AOE, 1.0s Cast
+                // Lvl 250: 800% AOE, Instant
                 damageScale = actor.level >= 250 ? 8.0 : (actor.level >= 141 ? 6.0 : 4.0);
+                isMultiHit = false; // It's one big hit, but AOE
             } else if (actor.heroId === 'razor_assassin') {
-                // Guillotine Breaker: 500% -> 750% True Damage
+                // Guillotine Breaker
                 damageScale = actor.level >= 141 ? 7.5 : 5.0;
-                // Cooldown Reset on Kill handled in handleDeath
-            } else {
-                // Spirit Barrage: 10 arrows -> 15 -> 20. Dmg 40% each. Total: 400% -> 600% -> 800%
+            } else if (actor.heroId === 'sable_ranger') {
+                // Spirit Barrage
                 isMultiHit = true;
+                // Lvl 40: 400% (10 arrows)
+                // Lvl 141: 600% (15 arrows)
+                // Lvl 250: 800% (20 arrows)
                 damageScale = actor.level >= 250 ? 8.0 : (actor.level >= 141 ? 6.0 : 4.0);
+            } else if (actor.heroId === 'tauron_mage') {
+                // Stampede of Souls
+                // Lvl 40: 400% AOE + Stun 1.5s
+                // Lvl 141: 600% AOE
+                // Lvl 250: Burning Ground 5s
+                damageScale = actor.level >= 250 ? 8.0 : (actor.level >= 141 ? 6.0 : 4.0);
+                isMultiHit = false;
+
+                // Stun effect
+                effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Stampede Stun', icon: '⚡' });
+
+                // Lvl 250: Burning Ground
+                if (actor.level >= 250) {
+                    effectsToApply.push({ id: `burn_${Date.now()}`, type: 'burning', duration: 5, value: 0.1, name: 'Burning Ground', icon: '🔥' });
+                }
+
+                this.showFloatingText(actor.element, "STAMPEDE!", true);
+            } else {
+                damageScale = 4.0;
             }
         }
         else if (!isSilenced && actor.cooldowns.skill1 === 0 && Math.random() > 0.4) {
             // SKILL 1
-            animType = 'skill1'; actor.cooldowns.skill1 = 3;
+            animType = 'skill1';
+            actor.cooldowns.skill1 = 3;
             skillName = skills[0]?.name || 'Skill 1';
 
             if (actor.heroId === 'oryx_mage') {
-                // Horn Bolt: 150% -> 180% -> 220%
+                // Horn Bolt
+                // Lvl 1: 150%, 9s CD (Logic uses turns, ~3 turns)
+                // Lvl 81: 180%, Silence
+                // Lvl 161: 220%
+                // Lvl 221: Pierce (2 targets)
                 damageScale = actor.level >= 161 ? 2.2 : (actor.level >= 81 ? 1.8 : 1.5);
-                if (actor.level >= 81) effectsToApply.push({ id: `silence_${Date.now()}`, type: 'silence', duration: 1, value: 0, name: 'Silence', icon: '🙊' });
+                // Dynamic CD: 3 turns for low speed/lvl, 4 turns for high speed
+                // Re-tuned: Low level needs 2 turns to match 9s (since turn is ~5s)
+                const cdTurns = actor.level >= 161 ? 4 : (actor.level >= 81 ? 3 : 2);
+                actor.cooldowns.skill1 = cdTurns;
+                if (actor.level >= 81) {
+                    effectsToApply.push({ id: `silence_${Date.now()}`, type: 'silence', duration: 1, value: 0, name: 'Silence', icon: '🙊' });
+                }
             } else if (actor.heroId === 'razor_assassin') {
-                // Tusk Gore: 160% -> 200%. Bleed.
+                // Tusk Gore
                 damageScale = actor.level >= 81 ? 2.0 : 1.6;
                 const bleedDuration = actor.level >= 161 ? 5 : 3;
                 effectsToApply.push({ id: `bleed_${Date.now()}`, type: 'dot', duration: bleedDuration, value: 0.4, name: 'Bleed', icon: '🩸' });
-            } else {
-                // Wind Piercer: 140% -> 170% -> 200%. Lvl 221 Crit Rate (+30%)
+            } else if (actor.heroId === 'sable_ranger') {
+                // Wind Piercer
+                // Lvl 1: 140%, 8s CD
+                // Lvl 81: 170%
+                // Lvl 161: 200%, 7s CD
+                // Lvl 221: +30% Crit Rate
                 damageScale = actor.level >= 161 ? 2.0 : (actor.level >= 81 ? 1.7 : 1.4);
+
+                // Dynamic CD: 8s/7s
+                // 8s (Slow/Base) -> ~2.5 turns. 7s -> ~2 turns.
+                // High Speed (2.5s) -> 8s is 3+ turns.
+                let cd = actor.level >= 161 ? 3 : 3;
+                // Using 3 as base (approx 8s). Higher speeds will cycle faster naturally.
+                actor.cooldowns.skill1 = cd;
+
                 if (actor.level >= 221) {
-                    // Temporary crit boost handled in applyDamage
+                    // +30% Crit handled in applyDamage via forceCrit logic or temp buff
+                    // We can simulate it by ensuring the hit is crit if roll passes 30% check
                 }
+            } else if (actor.heroId === 'tauron_mage') {
+                // Spirit Bolt
+                // Lvl 1: 140% + Knockback
+                // Lvl 81: 180%
+                // Lvl 161: Splash
+                // Lvl 221: Restore 5% MP (simulated as heal)
+                damageScale = actor.level >= 161 ? 2.0 : (actor.level >= 81 ? 1.8 : 1.4);
+                actor.cooldowns.skill1 = 3;
+
+                // Mystic Hide Passive: On Cast gain Shield at Lvl 201
+                if (actor.level >= 201) {
+                    const shieldAmt = Math.floor(actor.maxHp * 0.1);
+                    this.applyStatus(actor, { id: `shield_${Date.now()}`, type: 'shield', duration: 3, value: shieldAmt, name: 'Mystic Shield', icon: '🛡️' });
+                }
+
+                // Lvl 221: Restore 5% MP (simulated as 5% HP heal)
+                if (actor.level >= 221) {
+                    const healAmt = Math.floor(actor.maxHp * 0.05);
+                    actor.hp = Math.min(actor.maxHp, actor.hp + healAmt);
+                    actor.hpBarFill.style.width = `${(actor.hp / actor.maxHp) * 100}%`;
+                    this.showFloatingText(actor.element, `+${healAmt} 💧`, false);
+                    actor.battleStats.healing += healAmt;
+                }
+
+                // Knockback visual effect on target (applied after damage in targets loop)
+                // Set flag to apply knockback
+                isMultiHit = actor.level >= 161; // Splash = hit multiple
+
+                this.showFloatingText(actor.element, "Spirit Bolt!", true);
+            } else {
+                damageScale = 1.4;
             }
         }
         else if (!isSilenced && actor.cooldowns.skill2 === 0 && Math.random() > 0.4) {
             // SKILL 2
-            animType = 'skill1'; actor.cooldowns.skill2 = 4;
+            animType = 'skill1';
             skillName = skills[1]?.name || 'Skill 2';
 
             if (actor.heroId === 'oryx_mage') {
                 // Astral Leap
+                // Lvl 10: Teleport + 20% Speed, 15s CD
+                // Lvl 101: 30% Speed, 12s CD
+                // Lvl 181: 10s CD
+                // Lvl 241: Stun Trap
                 damageScale = 0;
-                this.applyStatus(actor, { id: `buff_spd_${Date.now()}`, type: 'buff_speed', duration: 2, value: 1.3, name: 'Astral Speed', icon: '⚡' });
-                if (actor.level >= 241) effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Stun Trap', icon: '⚡' });
+                // Dynamic CD Mapping: 15s/12s/10s -> Turns
+                // Slow Turn (5s) -> 3 turns. Fast Turn (2.5s) -> 4-6 turns.
+                let cd = 3;
+                if (actor.level >= 181) cd = 4; // 10s at high speed
+                else if (actor.level >= 101) cd = 4; // 12s
+                else cd = 3; // 15s
+
+                actor.cooldowns.skill2 = cd;
+
+                const speedVal = actor.level >= 101 ? 1.3 : 1.2;
+                this.applyStatus(actor, { id: `buff_spd_${Date.now()}`, type: 'buff_speed', duration: 2, value: speedVal, name: 'Astral Speed', icon: '⚡' });
+
+                if (actor.level >= 241) {
+                    // Stun Trap: Apply Stun to target
+                    effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Stun Trap', icon: '⚡' });
+                }
+
+                // Visual feedback for Teleport
+                this.showFloatingText(actor.element, "Teleport!", true);
             } else if (actor.heroId === 'razor_assassin') {
-                // Wild Charge: 120%. Charge.
+                // Wild Charge
+                actor.cooldowns.skill2 = 4;
                 damageScale = 1.2;
                 if (actor.level >= 101) {
                     const shieldAmount = Math.floor(actor.maxHp * 0.15);
                     this.applyStatus(actor, { id: `shield_${Date.now()}`, type: 'shield', duration: 3, value: shieldAmount, name: 'Shield', icon: '🛡️' });
                 }
-                if (actor.level >= 181) actor.cooldowns.skill2 = 3; // Reduced CD (normally 4)
+                if (actor.level >= 181) actor.cooldowns.skill2 = 3;
                 if (actor.level >= 241) effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Knock Up', icon: '⬆️' });
-            } else {
+            } else if (actor.heroId === 'sable_ranger') {
                 // Back-Kick Vault
-                damageScale = 1.0; // 100%
-                if (actor.level >= 241) effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Stun Kick', icon: '👢' });
+                // Lvl 10: 100%, Jump Back, 12s CD
+                // Lvl 101: Double Knockback
+                // Lvl 181: 9s CD
+                // Lvl 241: Stun (2s)
+
+                damageScale = 1.0;
+                // CD: 12s -> ~4 turns. 9s -> ~3 turns.
+                actor.cooldowns.skill2 = actor.level >= 181 ? 3 : 4;
+
+                if (actor.level >= 241) {
+                    // Stun 2s -> ~1 turn
+                    effectsToApply.push({ id: `stun_${Date.now()}`, type: 'stun', duration: 1, value: 0, name: 'Stun Kick', icon: '👢' });
+                }
+
+                this.showFloatingText(actor.element, "Back-Kick!", true);
+            } else if (actor.heroId === 'tauron_mage') {
+                // Ancestral Ward
+                // Lvl 10: AOE Dmg + Slow 3s, 12s CD
+                // Lvl 101: +20% Def Buff 5s
+                // Lvl 181: 8s CD
+                // Lvl 241: Immobilize 2s instead of Slow
+
+                damageScale = 1.0;
+                actor.cooldowns.skill2 = actor.level >= 181 ? 3 : 4;
+
+                // Slow or Immobilize
+                if (actor.level >= 241) {
+                    effectsToApply.push({ id: `immob_${Date.now()}`, type: 'immobilize', duration: 1, value: 0, name: 'Immobilize', icon: '🔒' });
+                } else {
+                    effectsToApply.push({ id: `slow_${Date.now()}`, type: 'slow', duration: 2, value: 0.5, name: 'Slowed', icon: '🐢' });
+                }
+
+                // Lvl 101: Def Buff
+                if (actor.level >= 101) {
+                    this.applyStatus(actor, { id: `def_buff_${Date.now()}`, type: 'buff_def', duration: 3, value: 1.2, name: 'Ancestral Def', icon: '🛡️' });
+                }
+
+                // Mystic Hide Passive: On Cast gain Shield at Lvl 201
+                if (actor.level >= 201) {
+                    const shieldAmt = Math.floor(actor.maxHp * 0.1);
+                    this.applyStatus(actor, { id: `shield_${Date.now()}`, type: 'shield', duration: 3, value: shieldAmt, name: 'Mystic Shield', icon: '✨' });
+                }
+
+                this.showFloatingText(actor.element, "Ancestral Ward!", true);
+            } else {
+                // Default Skill 2
+                actor.cooldowns.skill2 = 4;
+                damageScale = 1.0;
             }
         }
         else {
@@ -874,68 +1379,140 @@ export class BattleArenaUI {
         // Animation & Movement Logic
         const performAttackAnim = () => {
             this.playAnim(actor, animType, false, () => {
-                // If melee, don't auto-idle here, wait for return
                 if (!actor.isMelee && !actor.isDead) this.playAnim(actor, 'idle');
             });
         };
 
         if (actor.isMelee) {
-            // Dash toward the target - calculate direction based on actual positions (both X and Y)
+            // Dash logic ...
+            // (Keeping existing dash logic for non-Oryx melee)
             const actorRect = actor.element.getBoundingClientRect();
             const targetRect = target.element.getBoundingClientRect();
-
-            // Calculate direction and distance to move toward target
             const deltaX = targetRect.left - actorRect.left;
             const deltaY = targetRect.top - actorRect.top;
-
-            // Move 60% of the way toward target, capped at reasonable limits
-            // Move almost fully toward target (stop 60px short to avoid full overlap)
             const approachDist = 60;
             const moveX = (Math.max(0, Math.abs(deltaX) - approachDist)) * Math.sign(deltaX);
-            const moveY = deltaY; // Move to exact Y plane
+            const moveY = deltaY;
 
             actor.element.style.transition = `transform ${250 / this.battleSpeed}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
             actor.element.style.transform = `translate(-50%, -50%) scale(0.9) translate(${moveX}px, ${moveY}px)`;
 
-            setTimeout(() => {
-                performAttackAnim();
-            }, 250 / this.battleSpeed);
-
-            // Return to base position
+            setTimeout(() => { performAttackAnim(); }, 250 / this.battleSpeed);
             setTimeout(() => {
                 actor.element.style.transition = `transform ${350 / this.battleSpeed}ms ease-out`;
                 actor.element.style.transform = `translate(-50%, -50%) scale(0.9)`;
                 setTimeout(() => { if (!actor.isDead) this.playAnim(actor, 'idle'); }, 350 / this.battleSpeed);
-            }, (250 + 700) / this.battleSpeed); // Dash + Anim duration
+            }, (250 + 700) / this.battleSpeed);
         } else {
             performAttackAnim();
         }
 
-        // Damage Timing
-        // Range: 600ms
-        // Melee: 250ms (Dash) + 350ms (Windup) = 600ms. Perfect match.
+        // Damage Timing & Execution
+        let castTime = 600;
+        let isAOE = false;
+
+        // Oryx Nature's Wrath Cast Time
+        if (actor.heroId === 'oryx_mage' && skillName === 'Nature\'s Wrath') {
+            isAOE = true;
+            if (actor.level >= 250) castTime = 250; // Instant
+            else if (actor.level >= 141) castTime = 1000;
+            else castTime = 1500;
+        }
+
         setTimeout(() => {
-            if (target.isDead) return;
-            // Ranger Skill 1 Crit Bonus Check
-            let forceCrit = (actor.heroId === 'sable_ranger' && actor.level >= 221 && skillName.includes('Wind-Piercer'));
+            if (actor.isDead) return; // Attacker died mid-cast
 
-            this.applyDamage(target, damageScale, actor, isMultiHit, forceCrit);
-            effectsToApply.forEach(e => this.applyStatus(target, e));
+            // Resolve Targets
+            let targets: BattleEntity[] = [target];
+            if (isAOE) {
+                // AOE hits all living enemies
+                targets = (this.heroes.includes(actor) ? this.enemies : this.heroes).filter(t => !t.isDead);
+            } else if (actor.heroId === 'oryx_mage' && skillName === 'Horn Bolt' && actor.level >= 221) {
+                // Pierce: Hit Target + 1 Random
+                const enemies = (this.heroes.includes(actor) ? this.enemies : this.heroes).filter(t => !t.isDead && t !== target);
+                if (enemies.length > 0) {
+                    const second = enemies[Math.floor(Math.random() * enemies.length)];
+                    targets.push(second);
+                }
+            }
 
-            if (target.hp <= 0) {
-                this.handleDeath(target);
-                // Reset animation flag after death animation to continue battle
+            // Apply to all valid targets
+            targets.forEach(t => {
+                if (t.isDead) return;
+
+                // Ranger Skill 1 Crit Bonus Check
+                let forceCrit = (actor.heroId === 'sable_ranger' && actor.level >= 221 && skillName.includes('Wind-Piercer'));
+
+                this.applyDamage(t, damageScale, actor, isMultiHit, forceCrit);
+                effectsToApply.forEach(e => this.applyStatus(t, { ...e, id: e.id + Math.random() })); // Unique ID for each target
+
+                // Tauron Spirit Bolt knockback
+                if (actor.heroId === 'tauron_mage' && skillName === 'Spirit Bolt') {
+                    this.applyKnockback(t, this.heroes.includes(actor));
+                }
+
+                if (t.hp <= 0) {
+                    this.handleDeath(t);
+                }
+            });
+
+            // Reset animation flag
+            if (targets.some(t => t.hp <= 0)) {
                 setTimeout(() => { this.isAnimatingAction = false; }, 1500 / this.battleSpeed);
             } else {
                 setTimeout(() => { this.isAnimatingAction = false; }, 1200 / this.battleSpeed);
             }
-        }, 600 / this.battleSpeed);
+
+        }, castTime / this.battleSpeed);
     }
 
     private applyStatus(target: BattleEntity, effect: StatusEffect) {
         target.effects.push(effect);
         this.updateStatusUI(target);
         this.showFloatingText(target.element, effect.icon, false);
+
+        // Play dizzy animation when stun is applied
+        if (effect.type === 'stun' && !target.isDead) {
+            this.playAnim(target, 'dizzy', true);
+        }
+
+        // Update shield bar when shield is applied
+        if (effect.type === 'shield') {
+            this.updateShieldBar(target);
+        }
+    }
+
+    private updateShieldBar(entity: BattleEntity) {
+        const shields = entity.effects.filter(e => e.type === 'shield');
+        const totalShield = shields.reduce((sum, s) => sum + s.value, 0);
+
+        if (totalShield > 0) {
+            // Show shield bar and update fill
+            entity.shieldBarTrack.style.display = 'block';
+            // Shield bar shows shield as % of max HP (capped at 100%)
+            const shieldPct = Math.min(100, (totalShield / entity.maxHp) * 100);
+            entity.shieldBarFill.style.width = `${shieldPct}%`;
+        } else {
+            // Hide shield bar
+            entity.shieldBarTrack.style.display = 'none';
+            entity.shieldBarFill.style.width = '0%';
+        }
+    }
+
+    private applyKnockback(target: BattleEntity, isPlayer: boolean) {
+        // Knockback visual: Push target away briefly then return
+        const direction = isPlayer ? 1 : -1; // Push away from attacker
+        const knockbackDist = 30;
+
+        target.element.style.transition = 'transform 0.15s ease-out';
+        target.element.style.transform = `translateX(${knockbackDist * direction}px)`;
+
+        setTimeout(() => {
+            target.element.style.transition = 'transform 0.2s ease-in';
+            target.element.style.transform = 'translateX(0)';
+        }, 150);
+
+        this.showFloatingText(target.element, "💫 Knockback!", false);
     }
 
     private updateEffects(entity: BattleEntity) {
@@ -944,6 +1521,13 @@ export class BattleArenaUI {
         entity.effects = entity.effects.filter(e => e.duration > 0);
         if (expired.length > 0) {
             this.updateStatusUI(entity);
+
+            // If stun expired and entity is still alive, return to idle animation
+            const stunExpired = expired.some(e => e.type === 'stun');
+            const stillStunned = entity.effects.some(e => e.type === 'stun');
+            if (stunExpired && !stillStunned && !entity.isDead) {
+                this.playAnim(entity, 'idle', true);
+            }
         }
     }
 
@@ -957,7 +1541,7 @@ export class BattleArenaUI {
         entity.effects.forEach(e => {
             const icon = document.createElement('div');
             icon.innerText = e.icon;
-            icon.style.cssText = `font-size: 14px; background: rgba(0,0,0,0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;`;
+            icon.style.cssText = `font-size: 14px; background: rgba(0, 0, 0, 0.6); padding: 2px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.3); flex-shrink: 0;`;
             innerWrapper.appendChild(icon);
         });
 
@@ -979,10 +1563,10 @@ export class BattleArenaUI {
                 const style = document.createElement('style');
                 style.id = 'buff-marquee-style';
                 style.textContent = `
-                    @keyframes buffMarquee {
-                        0% { transform: translateX(0); }
-                        100% { transform: translateX(calc(-100% + 100px)); }
-                    }
+                @keyframes buffMarquee {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(calc(-100% + 100px)); }
+                }
                 `;
                 document.head.appendChild(style);
             }
@@ -995,23 +1579,57 @@ export class BattleArenaUI {
         if (atkBuff) finalAtk *= atkBuff.value;
 
         // Mage Passive - Static Hooves
-        if (attacker.heroId === 'oryx_mage' && attacker.passiveCharges >= 100) {
-            scale *= attacker.level >= 201 ? 2.0 : 1.8; // Bounce 3 vs 2
-            attacker.passiveCharges = 0;
-            this.showFloatingText(attacker.element, "STATIC DISCHARGE!", true);
+        if (attacker.heroId === 'oryx_mage') {
+            const maxCharges = attacker.level >= 121 ? 80 : 100;
+            if ((attacker.passiveCharges || 0) >= maxCharges) {
+                attacker.passiveCharges = 0;
+                this.showFloatingText(attacker.element, "STATIC DISCHARGE!", true);
+
+                // Bounce Logic
+                // Bounce 2 Targets (Main + 1) at Lvl 20
+                // Bounce 3 Targets (Main + 2) at Lvl 201
+                const numExtras = attacker.level >= 201 ? 2 : 1;
+                const bounceDmgScale = (attacker.level >= 201 ? 1.0 : 0.8) * scale;
+
+                const enemies = (this.heroes.includes(attacker) ? this.enemies : this.heroes).filter(t => !t.isDead && t !== target);
+
+                // Hit extra targets
+                for (let i = 0; i < numExtras; i++) {
+                    if (enemies.length === 0) break;
+                    const idx = Math.floor(Math.random() * enemies.length);
+                    const bounceTarget = enemies[idx];
+                    enemies.splice(idx, 1); // Remove so we don't hit same choice twice
+
+                    // Recursive call - safe because charges are 0 now
+                    this.applyDamage(bounceTarget, bounceDmgScale, attacker, false, forceCrit);
+                    this.showFloatingText(bounceTarget.element, "Zap!", false);
+                }
+            }
         }
 
         // Ranger Passive - Hunter's Mark
         if (attacker.heroId === 'sable_ranger') {
             const marks = target.effects.filter(e => e.type === 'mark').length;
             if (marks > 0) {
+                // Lvl 20: 3%. Lvl 121: 5%.
                 const perStack = attacker.level >= 121 ? 0.05 : 0.03;
-                const boost = 1 + (marks * perStack);
-                finalAtk *= Math.min(boost, 1.5);
+
+                // Lvl 201: Max 10 stacks. Else 5.
+                const maxStacks = attacker.level >= 201 ? 10 : 5;
+                const effectiveStacks = Math.min(marks, maxStacks);
+
+                const boost = 1 + (effectiveStacks * perStack);
+                finalAtk *= boost;
+
+                this.showFloatingText(attacker.element, `Mark Dmg +${Math.round((boost - 1) * 100)}%`, false);
             }
+
+            // Apply new stack
             let maxMarks = attacker.level >= 201 ? 10 : 5;
             if (marks < maxMarks) {
-                this.applyStatus(target, { id: `mark_${Date.now()}`, type: 'mark', name: 'Mark', duration: 3, value: 0, icon: '🎯' });
+                // Duration matches "permanent until dead" or long enough?
+                // Standard turns for Mark usually 3-5. Let's make it 5 to allow stacking.
+                this.applyStatus(target, { id: `mark_${Date.now()}`, type: 'mark', name: 'Mark', duration: 5, value: 0, icon: '🎯' });
             }
         }
 
@@ -1040,6 +1658,14 @@ export class BattleArenaUI {
         const defBuff = target.effects.find(e => e.type === 'buff_def');
         if (defBuff) finalDef *= defBuff.value;
 
+        // Tauron Passive - Mystic Hide: Convert ATK to DEF
+        if (target.heroId === 'tauron_mage' && target.level >= 20) {
+            // Lvl 20: 15%. Lvl 121: 25%.
+            const conversionRate = target.level >= 121 ? 0.25 : 0.15;
+            const bonusDef = Math.floor(target.stats.atk * conversionRate);
+            finalDef += bonusDef;
+        }
+
         let mitigationMult = 10000 / (10000 + finalDef);
         if (isTrueDamage) mitigationMult = 1.0; // Ignore armor
 
@@ -1065,18 +1691,19 @@ export class BattleArenaUI {
             // Cleanup empty shields
             target.effects = target.effects.filter(e => e.type !== 'shield' || e.value > 0);
             this.updateStatusUI(target);
-            if (absorb > 0) this.showFloatingText(target.element, `Absorbed (${absorb})`, false);
+            this.updateShieldBar(target); // Update shield bar visual
+            if (absorb > 0) this.showFloatingText(target.element, `🛡️ Absorbed(${absorb})`, false);
         }
 
         target.hp = Math.max(0, target.hp - finalDamage);
-        target.hpBarFill.style.width = `${(target.hp / target.maxHp) * 100}%`;
+        target.hpBarFill.style.width = `${(target.hp / target.maxHp) * 100}% `;
 
         if (target.hp > 0) this.playAnim(target, 'hit1', false, () => this.playAnim(target, 'idle'));
 
         if (isMultiHit) {
-            this.showFloatingText(target.element, `-${finalDamage} (x20)`, isCrit);
+            this.showFloatingText(target.element, `- ${finalDamage} (x20)`, isCrit);
         } else {
-            this.showFloatingText(target.element, `-${finalDamage}${isCrit ? '!' : ''}`, isCrit);
+            this.showFloatingText(target.element, `- ${finalDamage}${isCrit ? '!' : ''} `, isCrit);
         }
 
         // Track battle stats
@@ -1108,8 +1735,8 @@ export class BattleArenaUI {
             if (killer.level >= 201) {
                 const healAmt = Math.floor(killer.maxHp * 0.2);
                 killer.hp = Math.min(killer.maxHp, killer.hp + healAmt);
-                killer.hpBarFill.style.width = `${(killer.hp / killer.maxHp) * 100}%`;
-                this.showFloatingText(killer.element, `+${healAmt}`, false);
+                killer.hpBarFill.style.width = `${(killer.hp / killer.maxHp) * 100}% `;
+                this.showFloatingText(killer.element, `+ ${healAmt} `, false);
                 killer.battleStats.healing += healAmt;
             }
             if (killer.level >= 250) {
@@ -1140,13 +1767,14 @@ export class BattleArenaUI {
                 framesPerRow = config.framesPerRow;
                 spriteSize = entity.enemySpriteConfig.frameSize;
             } else {
-                // Fallback to idle
-                const idle = entity.enemySpriteConfig.animations.idle;
-                animFile = entity.enemySpriteConfig.basePath + idle.file;
-                totalFrames = idle.frames;
-                framesPerRow = idle.framesPerRow;
+                // Fallback: dizzy -> hit -> idle
+                let fallbackAnim = entity.enemySpriteConfig.animations.hit;
+                if (!fallbackAnim) fallbackAnim = entity.enemySpriteConfig.animations.idle;
+                animFile = entity.enemySpriteConfig.basePath + fallbackAnim.file;
+                totalFrames = fallbackAnim.frames;
+                framesPerRow = fallbackAnim.framesPerRow;
                 spriteSize = entity.enemySpriteConfig.frameSize;
-                mappedAnimName = 'idle';
+                mappedAnimName = fallbackAnim === entity.enemySpriteConfig.animations.idle ? 'idle' : 'hit';
             }
         } else {
             // HERO ANIMATION MAPPING
@@ -1299,26 +1927,26 @@ export class BattleArenaUI {
 
         // Red damage color with dark stroke outline like reference
         el.style.cssText = `
-            position: absolute;
-            font-family: 'SF Pro Display', sans-serif;
-            font-weight: 900;
-            font-size: ${isCrit ? '2.5rem' : '1.8rem'};
-            color: ${isCrit ? '#fbbf24' : '#ef4444'};
-            -webkit-text-stroke: 3px #000;
-            paint-order: stroke fill;
-            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 3px 0 #000;
-            animation: floatUpFade 0.8s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
-            z-index: 1000;
-            will-change: transform, opacity;
-            pointer-events: none;
-        `;
+                position: absolute;
+                font - family: 'SF Pro Display', sans - serif;
+                font - weight: 900;
+                font - size: ${isCrit ? '2.5rem' : '1.8rem'};
+                color: ${isCrit ? '#fbbf24' : '#ef4444'};
+                -webkit - text - stroke: 3px #000;
+                paint - order: stroke fill;
+                text - shadow: 2px 2px 0 #000, -2px - 2px 0 #000, 2px - 2px 0 #000, -2px 2px 0 #000, 0 3px 0 #000;
+                animation: floatUpFade 0.8s forwards cubic - bezier(0.2, 0.8, 0.2, 1);
+                z - index: 1000;
+                will - change: transform, opacity;
+                pointer - events: none;
+                `;
 
         if (isCrit) {
             el.style.textShadow = '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 0 15px rgba(251, 191, 36, 0.8)';
         }
 
         const randomX = (Math.random() - 0.5) * 50;
-        el.style.left = `calc(50% + ${randomX}px)`;
+        el.style.left = `calc(50 % + ${randomX}px)`;
         el.style.top = '80px';
         targetEl.appendChild(el);
         setTimeout(() => el.remove(), 1000 / this.battleSpeed);
@@ -1330,13 +1958,13 @@ export class BattleArenaUI {
         const h = document.createElement('div');
         // HUD Container - Flex row for controls
         h.style.cssText = `
-            position: absolute; bottom: 40px; right: 40px; 
-            display: flex; gap: 15px; align-items: center; 
-            z-index: 10000; 
-            background: rgba(0,0,0,0.5); padding: 15px; 
-            border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); 
-            backdrop-filter: blur(5px);
-        `;
+                position: absolute; bottom: 40px; right: 40px;
+                display: flex; gap: 15px; align - items: center;
+                z - index: 10000;
+                background: rgba(0, 0, 0, 0.5); padding: 15px;
+                border - radius: 25px; border: 1px solid rgba(255, 255, 255, 0.1);
+                backdrop - filter: blur(5px);
+                `;
 
         // Start Button (Now inside HUD, Left aligned relative to Auto)
         this.createStartButton(h);
@@ -1361,55 +1989,42 @@ export class BattleArenaUI {
         this.repeatBtn = document.createElement('div');
         this.repeatBtn.className = 'hud-btn';
         this.repeatBtn.style.cssText = `
-            width: 60px; height: 60px; border-radius: 50%; 
-            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
-            cursor: pointer; transition: all 0.2s;
-        `;
+                width: 50px; height: 50px; border-radius: 50%;
+                background: rgba(0, 0, 0, 0.6); border: 2px solid #fff; color: #fff;
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                font-weight: bold; font-family: 'SF Pro Display', sans-serif; font-size: 0.7rem;
+                cursor: pointer; transition: all 0.2s; pointer-events: auto;
+                `;
 
         const icon = document.createElement('div');
         icon.innerText = '🔁';
         icon.style.fontSize = '1.2rem';
+        icon.style.lineHeight = '1';
         this.repeatBtn.appendChild(icon);
 
         const text = document.createElement('div');
         text.innerText = 'REPEAT';
+        text.style.marginTop = '2px';
         this.repeatBtn.appendChild(text);
 
         this.repeatBtn.onclick = () => this.toggleRepeat();
         c.appendChild(this.repeatBtn);
     }
 
-    private toggleRepeat() {
-        this.isRepeat = !this.isRepeat;
-        if (this.repeatBtn) {
-            if (this.isRepeat) {
-                this.repeatBtn.style.background = 'rgba(255, 215, 0, 0.8)';
-                this.repeatBtn.style.color = '#000';
-                this.repeatBtn.style.borderColor = '#ffd700';
-            } else {
-                this.repeatBtn.style.background = 'rgba(0,0,0,0.6)';
-                this.repeatBtn.style.color = '#fff';
-                this.repeatBtn.style.borderColor = '#fff';
-            }
-        }
-    }
-
     private createExitButton(c: HTMLElement) {
         const btn = document.createElement('div');
         btn.className = 'hud-btn';
         btn.style.cssText = `
-            width: 60px; height: 60px; border-radius: 50%; 
-            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
-            cursor: pointer; transition: all 0.2s;
-        `;
+                width: 50px; height: 50px; border-radius: 50%;
+                background: rgba(0, 0, 0, 0.6); border: 2px solid #fff; color: #fff;
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                font-weight: bold; font-family: 'SF Pro Display', sans-serif; font-size: 0.7rem;
+                cursor: pointer; transition: all 0.2s; pointer-events: auto;
+                `;
 
         const icon = document.createElement('div');
         icon.innerText = '✕';
-        icon.style.fontSize = '1.5rem';
+        icon.style.fontSize = '1.2rem';
         icon.style.lineHeight = '1';
         btn.appendChild(icon);
 
@@ -1424,15 +2039,16 @@ export class BattleArenaUI {
 
     private createStartButton(c: HTMLElement) {
         this.startBtn = document.createElement('button');
-        // Play Icon (Triangle) - Scaled down slightly
-        this.startBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 30px; height: 30px; margin-left: 3px;"><path d="M8 5v14l11-7z"/></svg>`;
+        // Simple Text Start Button to ensure no SVG issues
+        this.startBtn.innerText = 'PLAY';
         this.startBtn.style.cssText = `
-            width: 60px; height: 60px; border-radius: 50%;
+            width: 50px; height: 50px; border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
             color: #fff; border: 2px solid #fff;
             background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             cursor: pointer; transition: all 0.2s;
+            font-weight: 900; font-family: 'SF Pro Display', sans-serif; font-size: 0.8rem; pointer-events: auto;
         `;
 
         // Hover effect
@@ -1458,25 +2074,42 @@ export class BattleArenaUI {
         }
     }
 
+    private toggleRepeat() {
+        this.isRepeat = !this.isRepeat;
+        if (this.repeatBtn) {
+            if (this.isRepeat) {
+                this.repeatBtn.style.background = 'rgba(255, 215, 0, 0.8)';
+                this.repeatBtn.style.color = '#000';
+                this.repeatBtn.style.borderColor = '#ffd700';
+            } else {
+                this.repeatBtn.style.background = 'rgba(0,0,0,0.6)';
+                this.repeatBtn.style.color = '#fff';
+                this.repeatBtn.style.borderColor = '#fff';
+            }
+        }
+    }
+
     private createAutoButton(c: HTMLElement) {
         this.autoBtn = document.createElement('div');
         this.autoBtn.className = 'hud-btn';
         // Relative positioning for flex layout
         this.autoBtn.style.cssText = `
-            width: 60px; height: 60px; border-radius: 50%; 
-            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            font-weight: bold; font-family: 'SF Pro Display'; font-size: 0.8rem; 
-            cursor: pointer; transition: all 0.2s;
+            width: 50px; height: 50px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-weight: bold; font-family: 'SF Pro Display', sans-serif; font-size: 0.7rem;
+            cursor: pointer; transition: all 0.2s; pointer-events: auto;
         `;
 
         const icon = document.createElement('div');
         icon.innerText = '↺';
         icon.style.fontSize = '1.2rem';
+        icon.style.lineHeight = '1';
         this.autoBtn.appendChild(icon);
 
         const text = document.createElement('div');
         text.innerText = 'AUTO';
+        text.style.marginTop = '2px';
         this.autoBtn.appendChild(text);
 
         this.autoBtn.onclick = () => this.toggleAuto();
@@ -1511,8 +2144,10 @@ export class BattleArenaUI {
         }
 
         // Auto-Trigger: Start battle if not started
-        if (this.isAuto && !this.isBattleStarted) {
-            this.startBattle();
+        if (this.isAuto) {
+            if (!this.isBattleStarted) this.startBattle();
+            // Ensure Play button is hidden effectively immediately
+            if (this.startBtn) this.startBtn.style.display = 'none';
         }
     }
 
@@ -1521,11 +2156,11 @@ export class BattleArenaUI {
         this.speedBtn.className = 'hud-btn';
         // Relative positioning for flex layout
         this.speedBtn.style.cssText = `
-            width: 60px; height: 60px; border-radius: 50%; 
-            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff; 
-            display: flex; justify-content: center; align-items: center; 
-            font-weight: bold; font-family: 'SF Pro Display'; font-size: 1.2rem; 
-            cursor: pointer; transition: all 0.2s;
+            width: 50px; height: 50px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: 2px solid #fff; color: #fff;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-family: 'SF Pro Display', sans-serif; font-size: 1.0rem;
+            cursor: pointer; transition: all 0.2s; pointer-events: auto;
         `;
         this.speedBtn.innerText = `${this.battleSpeed}x`;
         this.speedBtn.onclick = () => this.toggleSpeed();
@@ -1549,7 +2184,7 @@ export class BattleArenaUI {
 
         const isMelee = MELEE_CLASSES.includes(data.class);
 
-        const container = document.createElement('div'); container.style.cssText = `display: flex; flex-direction: column; align-items: center; position: relative; z-index: 10;`;
+        const container = document.createElement('div'); container.style.cssText = `display: flex; flex-direction: column; align-items: center; position: relative; z-index: 10; pointer-events: none;`;
         const overheadUI = document.createElement('div');
         overheadUI.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: -150px; z-index: 20; pointer-events: none; padding-bottom: 20px;`;
         if (id === 'enemy') {
@@ -1584,6 +2219,14 @@ export class BattleArenaUI {
         statusContainer.style.cssText = `position: absolute; bottom: 100%; left: 0; width: 100px; max-width: 100px; display: flex; gap: 2px; margin-bottom: 2px; overflow: hidden;`;
         barsContainer.appendChild(statusContainer);
 
+        // Shield Bar - Above HP bar (initially hidden)
+        const shieldBarTrack = document.createElement('div');
+        shieldBarTrack.style.cssText = `width: 100px; height: 6px; background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%); border: 1px solid #3b82f6; border-radius: 3px; position: relative; overflow: hidden; margin-bottom: 2px; display: none;`;
+        const shieldBarFill = document.createElement('div');
+        shieldBarFill.style.cssText = `width: 0%; height: 100%; background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 50%, #1d4ed8 100%); transition: width 0.2s ease-out;`;
+        shieldBarTrack.appendChild(shieldBarFill);
+        barsContainer.appendChild(shieldBarTrack);
+
         // HP Bar - Main health bar with rounded top corners
         const hpBarTrack = document.createElement('div'); hpBarTrack.style.cssText = `width: 100px; height: 14px; background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%); border: 2px solid #333; border-bottom: none; border-radius: 7px 7px 0 0; position: relative; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);`;
         const hpBarFill = document.createElement('div'); hpBarFill.style.cssText = `width: 100%; height: 100%; background: ${id === 'enemy' ? 'linear-gradient(180deg, #f87171 0%, #dc2626 50%, #b91c1c 100%)' : 'linear-gradient(180deg, #86efac 0%, #22c55e 50%, #15803d 100%)'}; transition: width 0.2s ease-out;`;
@@ -1614,7 +2257,9 @@ export class BattleArenaUI {
 
         return {
             id, name, maxHp: stats.hp, hp: stats.hp, level: parseInt(level),
-            element: container, spriteEl: sprite, hpBarFill, apBarFill, statusContainer, baseConfig: spriteConfig,
+            element: container, spriteEl: sprite, hpBarFill, apBarFill, statusContainer,
+            shieldBarFill, shieldBarTrack, // Shield bar elements
+            baseConfig: spriteConfig,
             isDead: false, cooldowns: { skill1: 0, skill2: 0, skill3: 0, ult: 0 },
             currentAnim: 'idle', animFrame: 0, animTimestamp: 0, animReqId: null,
             currentAnimTotalFrames: ANIM_FRAMES.idle, loopAnim: true,

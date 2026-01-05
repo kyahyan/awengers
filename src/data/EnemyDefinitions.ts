@@ -17,6 +17,7 @@ export interface EnemySprite {
         hit: EnemyAnimationConfig;
         dead: EnemyAnimationConfig;
         walk?: EnemyAnimationConfig;
+        dizzy?: EnemyAnimationConfig; // Stun animation
     };
 }
 
@@ -90,6 +91,11 @@ const BOAR_ASSASSIN: EnemyDefinition = {
                 file: 'Armature_Armature_dead_Base_Layer_001_spritesheet.png',
                 frames: 59, // Estimation
                 framesPerRow: 5
+            },
+            dizzy: {
+                file: 'Armature_Armature_dizzy_Base_Layer_001_spritesheet.png',
+                frames: 40,
+                framesPerRow: 5
             }
         }
     }
@@ -129,7 +135,32 @@ const BOAR_BOSS: EnemyDefinition = {
 export const ENEMY_DEFINITIONS: EnemyDefinition[] = [
     BOAR_ASSASSIN,
     BOAR_ELITE,
-    BOAR_BOSS
+    BOAR_BOSS,
+    {
+        id: 'dummy_target',
+        name: 'Target Dummy',
+        displayName: 'Target Dummy',
+        type: 'normal',
+        icon: '/assets/Character/enemy/boar_assassin_with_animation_spritesheets/portrait/boar%20assassin.jpg', // Placeholder or use specialized icon
+        baseStats: {
+            hp: 999999, // Massive HP for testing
+            atk: 0,
+            def: 0,
+            speed: 0.1, // Very slow just in case
+            crit: '0%'
+        },
+        sprite: {
+            // Re-use invisible or static sprite if available, otherwise reuse boar for now but it won't attack
+            basePath: '/assets/Character/enemy/boar_assassin_with_animation_spritesheets/side-right/',
+            frameSize: 512,
+            animations: {
+                idle: { file: 'Armature_Armature_idle_Base_Layer_001_spritesheet.png', frames: 48, framesPerRow: 5 },
+                attack: { file: 'Armature_Armature_skill1_Base_Layer_001_spritesheet.png', frames: 40, framesPerRow: 5 },
+                hit: { file: 'Armature_Armature_hit1_Base_Layer_001_spritesheet.png', frames: 12, framesPerRow: 5 },
+                dead: { file: 'Armature_Armature_dead_Base_Layer_001_spritesheet.png', frames: 59, framesPerRow: 5 }
+            }
+        }
+    }
 ];
 
 // Helper to get enemy by ID

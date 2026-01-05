@@ -38,6 +38,38 @@ export const HERO_DEFINITIONS: Record<string, HeroDef[]> = {
     "Strength": [],
     "Agility": [
         {
+            codeName: "Sable",
+            name: "Sable The Windwalker",
+            class: "Ranger",
+            rarity: "Legendary",
+            baseStats: { str: 10, agi: 25, int: 10 }, // Adjusted to fit HeroStats interface
+            growth: { str: 1.5, agi: 4.0, int: 1.2 }, // Adjusted to fit HeroStats interface
+            skillCd: 10,
+            ultCd: 25,
+            skills: { // Adjusted to fit HeroSkills interface
+                active1: { name: "Wind Piercer", effect: "Damage", type: "Active" },
+                active2: { name: "Spirit Barrage", effect: "Damage", type: "Ultimate" }, // Assuming ult is active2
+                passive1: { name: "Hunter's Mark", effect: "Buff", type: "Passive" },
+                passive2: { name: "Agility Boost", effect: "Stats", type: "Passive" } // Placeholder for 4th skill
+            }
+        },
+        {
+            codeName: "Barruk",
+            name: "Barruk The Iron Hunter",
+            class: "Ranger",
+            rarity: "Legendary",
+            baseStats: { str: 15, agi: 20, int: 8 }, // Adjusted to fit HeroStats interface
+            growth: { str: 2.0, agi: 3.5, int: 1.0 }, // Adjusted to fit HeroStats interface
+            skillCd: 14,
+            ultCd: 30,
+            skills: { // Adjusted to fit HeroSkills interface
+                active1: { name: "Heavy Bolt", effect: "Damage", type: "Active" },
+                active2: { name: "Explosive Bolas", effect: "Root", type: "Active" },
+                passive1: { name: "Big Game Hunter", effect: "Buff", type: "Passive" },
+                passive2: { name: "Siege Mode", effect: "Damage", type: "Ultimate" } // Assuming ult is passive2
+            }
+        },
+        {
             name: "Antelope Ranger", codeName: "Antelope Ranger", class: "Ranger", rarity: "Standard",
             baseStats: { str: 10, agi: 18, int: 8 }, growth: { str: 1.2, agi: 3.5, int: 1.0 },
             skillCd: 10, ultCd: 30,
@@ -70,6 +102,17 @@ export const HERO_DEFINITIONS: Record<string, HeroDef[]> = {
                 active2: { name: "Astral Leap", effect: "Teleport", type: "Active" },
                 passive1: { name: "Static Hooves", effect: "Charge", type: "Passive" },
                 passive2: { name: "Arcane Aura", effect: "Regen", type: "Passive" }
+            }
+        },
+        {
+            name: "Tauron", codeName: "Tauron", class: "Battle Mage", rarity: "Standard",
+            baseStats: { str: 15, agi: 8, int: 18 }, growth: { str: 2.0, agi: 1.0, int: 3.2 },
+            skillCd: 10, ultCd: 35,
+            skills: {
+                active1: { name: "Spirit Bolt", effect: "Damage", type: "Active" },
+                active2: { name: "Ancestral Ward", effect: "AOE Slow", type: "Active" },
+                passive1: { name: "Mystic Hide", effect: "Defense", type: "Passive" },
+                passive2: { name: "Stampede of Souls", effect: "AOE Stun", type: "Ultimate" }
             }
         }
     ]

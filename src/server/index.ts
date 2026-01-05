@@ -258,7 +258,7 @@ app.post('/api/reset-heroes', async (req, res) => {
 // Utility: Get All Heroes for Summon
 // Utility: Get All Heroes for Summon
 import { HERO_DEFINITIONS, HeroDef } from '../data/HeroDefinitions.js'; // Note .js extension for ESM
-import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager } from '../data/HeroProgression.js';
+import { createOryxHero, createSableHero, createRazorHero, createTauronHero, createBarrukHero, HeroProgressionManager } from '../data/HeroProgression.js';
 
 // Extended type that includes attribute info
 interface HeroWithAttribute extends HeroDef {
@@ -296,8 +296,12 @@ function getHeroManager(heroCodeName: string, heroData: any): HeroProgressionMan
 
     if (nameLower.includes('ranger') || nameLower.includes('sable')) {
         return createSableHero(level, instance);
+    } else if (nameLower.includes('barruk') || nameLower.includes('hunter')) {
+        return createBarrukHero(level, instance);
     } else if (nameLower.includes('razor') || nameLower.includes('assassin')) {
         return createRazorHero(level, instance);
+    } else if (nameLower.includes('tauron') || nameLower.includes('spiritwalker')) {
+        return createTauronHero(level, instance);
     } else {
         return createOryxHero(level, instance);
     }

@@ -728,6 +728,14 @@ export class HeroProgressionManager {
             ...total
         };
     }
+
+    public getStats(level: number): StatMilestone {
+        return this.getStatsAtLevel(level);
+    }
+
+    public getSkills(): SkillDefinition[] {
+        return this.config.skills;
+    }
 }
 
 // ==================== FACTORY FUNCTION ====================
@@ -881,6 +889,129 @@ export function createRazorHero(startingLevel: number = 1, instance?: HeroInstan
     return new HeroProgressionManager(RAZOR_HERO, newInstance);
 }
 
+// ==================== TAURON HERO DEFINITION ====================
+
+export const TAURON_HERO: HeroProgressionConfig = {
+    id: 'tauron_mage',
+    name: 'Tauron',
+    displayName: 'The Spiritwalker',
+    role: 'Frontline CC',
+    mainStat: 'INT',
+    maxLevel: 250,
+
+    // Base costs for level-up calculation
+    baseLevelCosts: {
+        gold: 50,
+        soulPotion: 10
+    },
+    costScaleFactor: 1.05,
+
+    // Stat milestones for interpolation (based on provided stats)
+    statMilestones: [
+        { level: 1, hp: 650, atk: 45, armor: 35, aspd: 0.6, moveSpeed: 290 },
+        { level: 50, hp: 8000, atk: 350, armor: 150, aspd: 0.65, moveSpeed: 300 },
+        { level: 100, hp: 22000, atk: 950, armor: 480, aspd: 0.75, moveSpeed: 310 },
+        { level: 150, hp: 80000, atk: 4500, armor: 1500, aspd: 0.82, moveSpeed: 320 },
+        { level: 200, hp: 150000, atk: 8000, armor: 2500, aspd: 0.87, moveSpeed: 325 },
+        { level: 250, hp: 210000, atk: 11500, armor: 3200, aspd: 0.9, moveSpeed: 330 },
+    ],
+
+    // Skill definitions with level-gated ranks
+    skills: [
+        {
+            id: 'spirit_bolt',
+            name: 'Spirit Bolt',
+            type: 'active',
+            description: 'Fires a bolt of spiritual energy that knocks back enemies.',
+            icon: '⚡',
+            ranks: [
+                { unlockLevel: 1, damagePercent: 140, cooldown: 8, description: '140% Mag Dmg + Knockback.', effect: 'Knockback' },
+                { unlockLevel: 81, damagePercent: 180, cooldown: 8, description: '180% Mag Dmg.', effect: 'Enhanced Damage' },
+                { unlockLevel: 161, damagePercent: 180, cooldown: 8, description: 'Gains Splash Damage.', effect: 'Splash' },
+                { unlockLevel: 221, damagePercent: 180, cooldown: 8, description: 'Restore 5% MP on hit.', effect: 'MP Restore' },
+            ]
+        },
+        {
+            id: 'ancestral_ward',
+            name: 'Ancestral Ward',
+            type: 'active',
+            description: 'Summons an ancestral ward that damages and slows enemies.',
+            icon: '🛡️',
+            ranks: [
+                { unlockLevel: 10, damagePercent: 100, cooldown: 12, description: 'AOE Dmg + Slow (3s).', effect: 'Slow' },
+                { unlockLevel: 101, damagePercent: 120, cooldown: 12, description: 'Gain +20% Def Buff (5s).', effect: 'Defense Buff' },
+                { unlockLevel: 181, damagePercent: 140, cooldown: 8, description: 'Reduced Cooldown (8s).', effect: 'Faster Cast' },
+                { unlockLevel: 241, damagePercent: 160, cooldown: 8, description: 'Effect changes to Immobilize (2s).', effect: 'Immobilize' },
+            ]
+        },
+        {
+            id: 'mystic_hide',
+            name: 'Mystic Hide',
+            type: 'passive',
+            description: 'Converts magical power into physical defense.',
+            icon: '🔮',
+            ranks: [
+                { unlockLevel: 20, description: 'Convert 15% Magic Atk to Phys Def.', effect: 'Defense Conversion' },
+                { unlockLevel: 121, description: 'Convert 25% Magic Atk to Phys Def.', effect: 'Enhanced Conversion' },
+                { unlockLevel: 201, description: 'On Cast: Gain Shield (3s).', effect: 'Shield' },
+            ]
+        },
+        {
+            id: 'stampede_of_souls',
+            name: 'Stampede of Souls',
+            type: 'ultimate',
+            description: 'Unleashes a stampede of ancestral spirits.',
+            icon: '👻',
+            ranks: [
+                { unlockLevel: 40, damagePercent: 400, cooldown: 30, description: '400% AOE Dmg + Stun (1.5s).', effect: 'Stun' },
+                { unlockLevel: 141, damagePercent: 600, cooldown: 28, description: '600% AOE Dmg.', effect: 'Enhanced Damage' },
+                { unlockLevel: 250, damagePercent: 800, cooldown: 25, description: 'Leave Burning Ground (5s).', effect: 'Burning Ground' },
+            ]
+        }
+    ],
+
+    // Rank-up milestones (every 20 levels)
+    // Star requirements: Lv100=2★, Lv140=3★, Lv180=4★, Lv220=5★
+    rankUpMilestones: [
+        { levelCap: 20, goldCost: 10000, heroPotionCost: 100, reward: 'Unlocks Passive: Mystic Hide', newCap: 40 },
+        { levelCap: 40, goldCost: 50000, heroPotionCost: 500, reward: 'Unlocks Ultimate: Stampede of Souls', newCap: 60 },
+        { levelCap: 60, goldCost: 150000, heroPotionCost: 1000, reward: 'Stat Boost: +10% Base HP', newCap: 80 },
+        { levelCap: 80, goldCost: 500000, heroPotionCost: 2500, reward: 'Stat Boost: +15% Base Armor', newCap: 100 },
+        { levelCap: 100, goldCost: 1500000, heroPotionCost: 5000, reward: 'Skill 2 Enhanced: Defense Buff', newCap: 120, starRequirement: 2 },
+        { levelCap: 120, goldCost: 5000000, heroPotionCost: 10000, reward: 'Passive Rank Up: 25% Conversion', newCap: 140 },
+        { levelCap: 140, goldCost: 15000000, heroPotionCost: 20000, reward: 'Ultimate Rank Up: 600% Damage', newCap: 160, starRequirement: 3 },
+        { levelCap: 160, goldCost: 50000000, heroPotionCost: 30000, reward: 'Skill 1 Rank Up: Splash Damage', newCap: 180 },
+        { levelCap: 180, goldCost: 100000000, heroPotionCost: 40000, reward: 'Skill 2 Rank Up: 8s Cooldown', newCap: 200, starRequirement: 4 },
+        { levelCap: 200, goldCost: 500000000, heroPotionCost: 50000, reward: 'Passive Rank Up: On Cast Shield', newCap: 220 },
+        { levelCap: 220, goldCost: 1000000000, heroPotionCost: 75000, reward: 'Skill 1 Rank Up: MP Restore', newCap: 240, starRequirement: 5 },
+        { levelCap: 240, goldCost: 5000000000, heroPotionCost: 100000, reward: 'Ultimate Rank Up: Burning Ground', newCap: 250 },
+    ]
+};
+
+export function createTauronHero(startingLevel: number = 1, instance?: HeroInstance): HeroProgressionManager {
+    if (instance) {
+        return new HeroProgressionManager(TAURON_HERO, instance);
+    }
+
+    const newInstance: HeroInstance = {
+        heroId: TAURON_HERO.id,
+        level: startingLevel,
+        currentRankIndex: 0,
+        experience: 0,
+        skillLevels: {},
+        equipment: new Array(9).fill(null)
+    };
+
+    // Calculate starting rank based on level
+    for (let i = 0; i < TAURON_HERO.rankUpMilestones.length; i++) {
+        if (startingLevel > TAURON_HERO.rankUpMilestones[i].levelCap) {
+            newInstance.currentRankIndex = i + 1;
+        }
+    }
+
+    return new HeroProgressionManager(TAURON_HERO, newInstance);
+}
+
 export function createSableHero(startingLevel: number = 1, instance?: HeroInstance): HeroProgressionManager {
     if (instance) {
         return new HeroProgressionManager(SABLE_HERO, instance);
@@ -903,5 +1034,114 @@ export function createSableHero(startingLevel: number = 1, instance?: HeroInstan
     }
 
     return new HeroProgressionManager(SABLE_HERO, newInstance);
+}
+
+export const BARRUK_HERO: HeroProgressionConfig = {
+    id: 'barruk_ranger',
+    name: 'Barruk',
+    displayName: 'The Iron Hunter',
+    role: 'Heavy Marksman',
+    mainStat: 'AGI',
+    maxLevel: 250,
+    baseLevelCosts: { gold: 100, soulPotion: 5 },
+    costScaleFactor: 1.08,
+    statMilestones: [
+        { level: 1, hp: 600, atk: 55, armor: 15, aspd: 0.55, moveSpeed: 295 },
+        { level: 50, hp: 8500, atk: 650, armor: 100, aspd: 0.60, moveSpeed: 305 }, // Interpolated
+        { level: 100, hp: 18500, atk: 1350, armor: 220, aspd: 0.70, moveSpeed: 315 },
+        { level: 150, hp: 50000, atk: 5000, armor: 500, aspd: 0.75, moveSpeed: 325 }, // Interpolated
+        { level: 200, hp: 100000, atk: 10000, armor: 900, aspd: 0.80, moveSpeed: 330 }, // Interpolated
+        { level: 250, hp: 180000, atk: 19200, armor: 1500, aspd: 0.85, moveSpeed: 340 }
+    ],
+    skills: [
+        {
+            id: 'heavy_bolt',
+            name: 'Heavy Bolt',
+            type: 'active',
+            description: 'Fires a heavy bolt dealing massive damage.',
+            icon: '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Heavy Bolt.png',
+            ranks: [
+                { unlockLevel: 1, damagePercent: 180, cooldown: 8, description: 'Deals 180% Physical Dmg to target.', effect: 'damage' },
+                { unlockLevel: 81, damagePercent: 220, cooldown: 8, description: 'Deals 220% Physical Dmg to target.', effect: 'damage' },
+                { unlockLevel: 161, damagePercent: 220, cooldown: 8, description: 'Reduces Target Armor by 30%.', effect: 'debuff' },
+                { unlockLevel: 221, damagePercent: 220, cooldown: 8, description: 'Pierces 1 extra target.', effect: 'multi_hit' }
+            ]
+        },
+        {
+            id: 'explosive_bolas',
+            name: 'Explosive Bolas',
+            type: 'active',
+            description: 'Throws bolas that root and damage enemies.',
+            icon: '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Explosive Bolas.png',
+            ranks: [
+                { unlockLevel: 10, damagePercent: 100, cooldown: 14, description: 'Deals 100% Dmg + Root (1.5s).', effect: 'cc' },
+                { unlockLevel: 101, damagePercent: 120, cooldown: 14, description: 'Increased AOE Range.', effect: 'cc_aoe' },
+                { unlockLevel: 181, damagePercent: 140, cooldown: 10, description: 'Cooldown reduced to 10s.', effect: 'cd_reduce' },
+                { unlockLevel: 241, damagePercent: 160, cooldown: 10, description: 'Root followed by Stun (1s).', effect: 'cc_stun' }
+            ]
+        },
+        {
+            id: 'big_game_hunter',
+            name: 'Big Game Hunter',
+            type: 'passive',
+            description: 'Expert at taking down large targets.',
+            icon: '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Big Game Hunter.png',
+            ranks: [
+                { unlockLevel: 20, damagePercent: 0, cooldown: 0, description: '+15% Dmg vs High HP Targets.', effect: 'buff' },
+                { unlockLevel: 121, damagePercent: 0, cooldown: 0, description: '+25% Dmg vs High HP Targets.', effect: 'buff' },
+                { unlockLevel: 201, damagePercent: 0, cooldown: 0, description: 'Every 4th hit is Critical.', effect: 'crit' }
+            ]
+        },
+        {
+            id: 'siege_mode',
+            name: 'Siege Mode',
+            type: 'ultimate',
+            description: 'Enter a stationary mode with increased range and damage.',
+            icon: '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Siege Mode.png',
+            ranks: [
+                { unlockLevel: 40, damagePercent: 0, cooldown: 30, description: 'Immobile, +50% Range/Aspd for 6s.', effect: 'buff_self' },
+                { unlockLevel: 141, damagePercent: 0, cooldown: 28, description: 'Duration increased to 8s.', effect: 'buff_duration' },
+                { unlockLevel: 250, damagePercent: 0, cooldown: 25, description: 'Attacks deal Splash Dmg.', effect: 'aoe_buff' }
+            ]
+        }
+    ],
+    rankUpMilestones: [
+        { levelCap: 20, goldCost: 200, heroPotionCost: 10, reward: 'Unlock Passive: Big Game Hunter', newCap: 40, starRequirement: 1 },
+        { levelCap: 40, goldCost: 500, heroPotionCost: 30, reward: 'Unlock Ultimate: Siege Mode', newCap: 60, starRequirement: 1 },
+        { levelCap: 60, goldCost: 1200, heroPotionCost: 80, reward: 'Stat Boost + Skill Rank Up', newCap: 80, starRequirement: 2 },
+        { levelCap: 80, goldCost: 3000, heroPotionCost: 200, reward: 'Skill Rank Up: Heavy Bolt II', newCap: 100, starRequirement: 2 },
+        { levelCap: 100, goldCost: 8000, heroPotionCost: 500, reward: 'Skill Rank Up: Explosive Bolas II', newCap: 120, starRequirement: 3 },
+        { levelCap: 120, goldCost: 15000, heroPotionCost: 1000, reward: 'Skill Rank Up: Big Game Hunter II', newCap: 140, starRequirement: 3 },
+        { levelCap: 140, goldCost: 30000, heroPotionCost: 2000, reward: 'Skill Rank Up: Siege Mode II', newCap: 160, starRequirement: 4 },
+        { levelCap: 160, goldCost: 60000, heroPotionCost: 3500, reward: 'Skill Rank Up: Heavy Bolt III', newCap: 180, starRequirement: 4 },
+        { levelCap: 180, goldCost: 120000, heroPotionCost: 6000, reward: 'Skill Rank Up: Explosive Bolas III', newCap: 200, starRequirement: 5 },
+        { levelCap: 200, goldCost: 250000, heroPotionCost: 10000, reward: 'Skill Rank Up: Big Game Hunter III', newCap: 220, starRequirement: 5 },
+        { levelCap: 220, goldCost: 500000, heroPotionCost: 20000, reward: 'Skill Rank Up: Heavy Bolt IV', newCap: 240, starRequirement: 5 },
+        { levelCap: 240, goldCost: 800000, heroPotionCost: 35000, reward: 'Skill Rank Up: Explosive Bolas IV', newCap: 250, starRequirement: 5 }
+    ]
+};
+
+export function createBarrukHero(startingLevel: number = 1, instance?: HeroInstance): HeroProgressionManager {
+    if (instance) {
+        return new HeroProgressionManager(BARRUK_HERO, instance);
+    }
+
+    const newInstance: HeroInstance = {
+        heroId: BARRUK_HERO.id,
+        level: startingLevel,
+        currentRankIndex: 0,
+        experience: 0,
+        skillLevels: {},
+        equipment: new Array(9).fill(null)
+    };
+
+    // Calculate starting rank based on level
+    for (let i = 0; i < BARRUK_HERO.rankUpMilestones.length; i++) {
+        if (startingLevel > BARRUK_HERO.rankUpMilestones[i].levelCap) {
+            newInstance.currentRankIndex = i + 1;
+        }
+    }
+
+    return new HeroProgressionManager(BARRUK_HERO, newInstance);
 }
 

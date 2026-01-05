@@ -1,5 +1,5 @@
 import { HeroAssetConfig, HERO_ASSETS } from '../data/HeroAssetsMap';
-import { createOryxHero, createSableHero, createRazorHero, HeroProgressionManager, SkillDefinition, HeroInstance } from '../data/HeroProgression';
+import { createOryxHero, createSableHero, createRazorHero, createTauronHero, createBarrukHero, HeroProgressionManager, SkillDefinition, HeroInstance } from '../data/HeroProgression';
 import { ITEMS, ALL_ITEMS } from '../data/Items';
 
 export class HeroUpgradeModal {
@@ -81,6 +81,22 @@ export class HeroUpgradeModal {
                 'wild_charge': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Wild Charge.png',
                 'blood_scent': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Blood Scent.png',
                 'guillotine_breaker': '/assets/Character/heroes/boar_assassin_with_animation_spritesheets/skills/Guillotine Breaker.png'
+            };
+        } else if (heroNameLower.includes('tauron') || heroNameLower.includes('spiritwalker')) {
+            this.heroManager = createTauronHero(heroLevel, heroInstance);
+            this.skillIconPaths = {
+                'spirit_bolt': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Spirit Bolt.png',
+                'ancestral_ward': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Ancestral Ward.png',
+                'mystic_hide': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Mystic Hide.png',
+                'stampede_of_souls': '/assets/Character/heroes/bull_mage_with_animation_spritesheets/skills/Stampede of Souls.png'
+            };
+        } else if (heroNameLower.includes('barruk') || heroNameLower.includes('hunter')) {
+            this.heroManager = createBarrukHero(heroLevel, heroInstance);
+            this.skillIconPaths = {
+                'heavy_bolt': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Heavy Bolt.png',
+                'explosive_bolas': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Explosive Bolas.png',
+                'big_game_hunter': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Big Game Hunter.png',
+                'siege_mode': '/assets/Character/heroes/bull_ranger_with_animation_spritesheets/skills/Siege Mode.png'
             };
         } else {
             this.heroManager = createOryxHero(heroLevel, heroInstance);
@@ -237,6 +253,20 @@ export class HeroUpgradeModal {
             speciesIconChar = '🐗';
             classColor = '#dc2626'; // Red
             speciesColor = '#7f1d1d'; // Dark Red/Brown
+        } else if (lowerName.includes('tauron')) {
+            heroClass = 'Battle Mage';
+            heroSpecies = 'Minotaur';
+            classIconChar = '🔮';
+            speciesIconChar = '🐂';
+            classColor = '#9333ea'; // Purple
+            speciesColor = '#b91c1c'; // Red
+        } else if (lowerName.includes('barruk')) {
+            heroClass = 'Heavy Marksman';
+            heroSpecies = 'Minotaur';
+            classIconChar = '🏹';
+            speciesIconChar = '🐂';
+            classColor = '#16a34a'; // Green
+            speciesColor = '#b91c1c'; // Red
         }
 
         // Helper for Attribute Icon Badge
@@ -307,7 +337,6 @@ export class HeroUpgradeModal {
 
             let costGold = 0;
             let costSecondResource = 0;
-            let secondResourceIcon = '';
             let buttonText = '';
             let buttonColor = '';
             let actionHandler: () => void = () => { };
@@ -323,7 +352,6 @@ export class HeroUpgradeModal {
 
                     costGold = 0;
                     costSecondResource = 0;
-                    secondResourceIcon = '⭐';
                     buttonText = `🔒 EVOLVE TO ${currentMilestone.starRequirement}★ FIRST`;
                     buttonColor = 'linear-gradient(135deg, #ef4444, #dc2626)'; // Red
                     actionHandler = () => {
@@ -333,7 +361,6 @@ export class HeroUpgradeModal {
                 } else if (rankCost) {
                     costGold = rankCost.gold;
                     costSecondResource = rankCost.heroPotion;
-                    secondResourceIcon = '🧪'; // Hero Potion
                     buttonText = '⬆ PROMOTE HERO';
                     buttonColor = 'linear-gradient(135deg, #a855f7, #7c3aed)'; // Purple
                     actionHandler = () => this.handleRankUp();
@@ -343,7 +370,6 @@ export class HeroUpgradeModal {
                 // LEVEL UP MODE
                 costGold = nextLevelCost.gold;
                 costSecondResource = nextLevelCost.soulPotion;
-                secondResourceIcon = '🧪'; // Soul Potion
                 buttonText = '⬆ LEVEL UP';
                 buttonColor = 'linear-gradient(135deg, #10b981, #059669)'; // Green
                 actionHandler = () => this.handleLevelUp();
@@ -506,7 +532,6 @@ export class HeroUpgradeModal {
         skillsBar.style.cssText = `position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; padding: 18px 30px; background: rgba(0, 0, 0, 0.7); border-radius: 18px; backdrop-filter: blur(10px); z-index: 10; border: 1px solid rgba(255,255,255,0.1);`;
 
         skills.forEach(skill => {
-            const currentRankIndex = this.getCurrentRankIndex(skill, heroLevel);
             const iconPath = this.skillIconPaths[skill.id] || '';
             const isUnlocked = skill.ranks[0].unlockLevel <= heroLevel;
 
@@ -651,6 +676,10 @@ export class HeroUpgradeModal {
         } else if (nameLower.includes('razor')) {
             heroBasePath = '/assets/Character/heroes/boar_assassin_with_animation_spritesheets';
             spriteFilename = 'Armature_Armature_idle_Base_Layer_001_spritesheet.png';
+        } else if (nameLower.includes('tauron')) {
+            heroBasePath = '/assets/Character/heroes/bull_mage_with_animation_spritesheets';
+        } else if (nameLower.includes('barruk')) {
+            heroBasePath = '/assets/Character/heroes/bull_ranger_with_animation_spritesheets';
         }
 
         const spriteSize = 950;
@@ -811,16 +840,7 @@ export class HeroUpgradeModal {
         }
     }
 
-    private recreateManager(level: number, instanceData?: any): HeroProgressionManager {
-        const nameLower = this.heroAssetName.toLowerCase();
-        let manager: HeroProgressionManager;
 
-        if (nameLower.includes('ranger')) manager = createSableHero(level, instanceData);
-        else if (nameLower.includes('razor')) manager = createRazorHero(level, instanceData);
-        else manager = createOryxHero(level, instanceData);
-
-        return manager;
-    }
 
     private getCurrentRankIndex(skill: SkillDefinition, level: number): number {
         let currentIndex = -1;
@@ -2019,6 +2039,30 @@ export class HeroUpgradeModal {
         } catch (e) {
             console.error(e);
             alert("Network Error");
+        }
+    }
+    private recreateManager(newLevel: number, instanceData: any): HeroProgressionManager {
+        const heroNameLower = this.heroAssetName.toLowerCase();
+
+        const heroInstance: HeroInstance = {
+            heroId: instanceData.heroId || this.instanceId,
+            level: newLevel,
+            currentRankIndex: instanceData.currentRankIndex || 0,
+            experience: instanceData.experience || 0,
+            skillLevels: instanceData.skillLevels || {},
+            equipment: instanceData.equipment || new Array(9).fill(null)
+        };
+
+        if (heroNameLower.includes('ranger') || heroNameLower.includes('sable')) {
+            return createSableHero(newLevel, heroInstance);
+        } else if (heroNameLower.includes('razor') || heroNameLower.includes('assassin')) {
+            return createRazorHero(newLevel, heroInstance);
+        } else if (heroNameLower.includes('tauron') || heroNameLower.includes('spiritwalker')) {
+            return createTauronHero(newLevel, heroInstance);
+        } else if (heroNameLower.includes('barruk') || heroNameLower.includes('hunter')) {
+            return createBarrukHero(newLevel, heroInstance);
+        } else {
+            return createOryxHero(newLevel, heroInstance);
         }
     }
 }

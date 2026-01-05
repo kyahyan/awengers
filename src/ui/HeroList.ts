@@ -641,6 +641,20 @@ export class HeroList {
             speciesIconChar = '🐗';
             classColor = '#dc2626'; // Red
             speciesColor = '#7f1d1d'; // Dark Red/Brown
+        } else if (lowerName.includes('tauron')) {
+            heroClass = 'Battle Mage';
+            heroSpecies = 'Minotaur';
+            classIconChar = '🔮';
+            speciesIconChar = '🐂';
+            classColor = '#9333ea'; // Purple
+            speciesColor = '#b91c1c'; // Red
+        } else if (lowerName.includes('barruk')) {
+            heroClass = 'Ranger';
+            heroSpecies = 'Minotaur';
+            classIconChar = '🏹';
+            speciesIconChar = '🐂';
+            classColor = '#16a34a'; // Green
+            speciesColor = '#b91c1c'; // Red
         }
 
         // Build the inner card with the portrait and overlays

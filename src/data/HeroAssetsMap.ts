@@ -36,7 +36,8 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
                 hit1: { frames: 8 },  // Adjusted based on file size ~300KB
                 dead: { frames: 28 },
                 skill1: { frames: 20 },
-                skill2: { frames: 40 }
+                skill2: { frames: 40 },
+                dizzy: { frames: 40 }  // Stun animation
             }
         }
     },
@@ -54,7 +55,8 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
                 hit1: { frames: 8 },
                 dead: { frames: 28 },
                 skill1: { frames: 20 },
-                skill2: { frames: 40 }
+                skill2: { frames: 40 },
+                dizzy: { frames: 40 }
             }
         }
     },
@@ -72,7 +74,8 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
                 hit1: { frames: 7 },
                 dead: { frames: 36 },
                 skill1: { frames: 34 },
-                skill2: { frames: 44 }
+                skill2: { frames: 44 },
+                dizzy: { frames: 40 }
             }
         }
     },
@@ -90,7 +93,8 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
                 hit1: { frames: 7 },
                 dead: { frames: 36 },
                 skill1: { frames: 34 },
-                skill2: { frames: 44 }
+                skill2: { frames: 44 },
+                dizzy: { frames: 40 }
             }
         }
     },
@@ -127,6 +131,78 @@ export const HERO_ASSETS: HeroAssetConfig[] = [
                 dead: { frames: 48 },
                 skill1: { frames: 24 },
                 skill2: { frames: 48 }
+            }
+        }
+    },
+    {
+        name: "Tauron",
+        use2DSprite: true,
+        sprite2D: {
+            spritesheetPath: "/assets/Character/heroes/bull_mage_with_animation_spritesheets/side-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            frameWidth: 512,
+            frameHeight: 512,
+            framesPerRow: 5,
+            totalFrames: 48,
+            fps: 24,
+            animations: {
+                hit1: { frames: 12 },
+                dead: { frames: 36 },
+                skill1: { frames: 24 },
+                skill2: { frames: 48 }
+            }
+        }
+    },
+    {
+        name: "Tauron Left", // For Side-Right Views (Enemy)
+        use2DSprite: true,
+        sprite2D: {
+            spritesheetPath: "/assets/Character/heroes/bull_mage_with_animation_spritesheets/side-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            frameWidth: 950,
+            frameHeight: 950,
+            framesPerRow: 5,
+            totalFrames: 48,
+            fps: 24,
+            animations: {
+                hit1: { frames: 8 },
+                dead: { frames: 28 },
+                skill1: { frames: 20 },
+                skill2: { frames: 40 }
+            }
+        }
+    },
+    {
+        name: "Barruk",
+        use2DSprite: true,
+        sprite2D: {
+            spritesheetPath: "/assets/Character/heroes/bull_ranger_with_animation_spritesheets/side-left/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            frameWidth: 950,
+            frameHeight: 950,
+            framesPerRow: 5,
+            totalFrames: 48,
+            fps: 24,
+            animations: {
+                hit1: { frames: 8 },
+                dead: { frames: 28 },
+                skill1: { frames: 20 },
+                skill2: { frames: 40 }
+            }
+        }
+    },
+    {
+        name: "Barruk Left",
+        use2DSprite: true,
+        sprite2D: {
+            spritesheetPath: "/assets/Character/heroes/bull_ranger_with_animation_spritesheets/side-right/Armature_Armature_idle_Base_Layer_spritesheet.png",
+            frameWidth: 950,
+            frameHeight: 950,
+            framesPerRow: 5,
+            totalFrames: 48,
+            fps: 24,
+            animations: {
+                hit1: { frames: 8 },
+                dead: { frames: 28 },
+                skill1: { frames: 20 },
+                skill2: { frames: 40 }
             }
         }
     }
