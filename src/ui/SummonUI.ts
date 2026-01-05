@@ -12,6 +12,9 @@ export class SummonUI {
     private onUpdate?: (user: UserProfile) => void;
     private summonBtnX1!: HTMLElement;
     private summonBtnX10!: HTMLElement;
+    private currentTab: 'scroll' | 'orb' = 'scroll';
+    private scrollContent!: HTMLElement;
+    private orbContent!: HTMLElement;
 
     constructor(onClose: () => void, onUpdate?: (user: UserProfile) => void) {
         this.onUpdate = onUpdate;
@@ -28,11 +31,111 @@ export class SummonUI {
         const content = this.modal.getContentArea();
         content.style.display = 'flex';
         content.style.flexDirection = 'column';
-        content.style.justifyContent = 'center';
         content.style.alignItems = 'center';
         content.style.position = 'relative';
         content.style.overflow = 'hidden';
+        content.style.padding = '0';
 
+        // Tab Bar
+        const tabBar = document.createElement('div');
+        tabBar.style.cssText = `
+            display: flex;
+            gap: 10px;
+            padding: 15px 20px;
+            width: 100%;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+            box-sizing: border-box;
+        `;
+
+        const createTab = (id: 'scroll' | 'orb', label: string, icon: string) => {
+            const tab = document.createElement('button');
+            tab.innerHTML = `${icon} ${label}`;
+            tab.style.cssText = `
+                padding: 12px 30px;
+                border: none;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 1rem;
+                font-family: 'SF Pro Rounded', sans-serif;
+                transition: all 0.2s;
+                border-radius: 8px;
+                background: ${this.currentTab === id ? 'linear-gradient(45deg, #ffd700, #ffa500)' : 'rgba(255,255,255,0.05)'};
+                color: ${this.currentTab === id ? '#000' : '#aaa'};
+            `;
+            tab.onclick = () => {
+                this.currentTab = id;
+                this.renderCurrentTab();
+                // Update tab styles
+                tabBar.querySelectorAll('button').forEach((btn, idx) => {
+                    const tabId = idx === 0 ? 'scroll' : 'orb';
+                    (btn as HTMLButtonElement).style.background = tabId === this.currentTab ? 'linear-gradient(45deg, #ffd700, #ffa500)' : 'rgba(255,255,255,0.05)';
+                    (btn as HTMLButtonElement).style.color = tabId === this.currentTab ? '#000' : '#aaa';
+                });
+            };
+            return tab;
+        };
+
+        tabBar.appendChild(createTab('scroll', 'SCROLL SUMMON', '📜'));
+        tabBar.appendChild(createTab('orb', 'ORB SUMMON', '🔮'));
+        content.appendChild(tabBar);
+
+        // Content Container (holds both scroll and orb content)
+        const contentContainer = document.createElement('div');
+        contentContainer.style.cssText = `
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        `;
+
+        // Scroll Summon Content
+        this.scrollContent = document.createElement('div');
+        this.scrollContent.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        `;
+        this.initializeScrollContent();
+        contentContainer.appendChild(this.scrollContent);
+
+        // Orb Summon Content
+        this.orbContent = document.createElement('div');
+        this.orbContent.style.cssText = `
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        `;
+        this.initializeOrbContent();
+        contentContainer.appendChild(this.orbContent);
+
+        content.appendChild(contentContainer);
+
+        // Result Overlay (Hidden initially)
+        this.createResultOverlay(content);
+    }
+
+    private renderCurrentTab() {
+        if (this.currentTab === 'scroll') {
+            this.scrollContent.style.display = 'flex';
+            this.orbContent.style.display = 'none';
+        } else {
+            this.scrollContent.style.display = 'none';
+            this.orbContent.style.display = 'flex';
+            this.refreshOrbContent();
+        }
+    }
+
+    private initializeScrollContent() {
         // The Summon "Scroll" Image
         this.cardImg = document.createElement('img');
         this.cardImg.src = '/assets/home/scroll/grand-summon.png';
@@ -60,7 +163,7 @@ export class SummonUI {
             this.performSummon();
         };
 
-        content.appendChild(this.cardImg);
+        this.scrollContent.appendChild(this.cardImg);
 
         // Scroll Count Display
         const scrollCountDisplay = document.createElement('div');
@@ -72,7 +175,7 @@ export class SummonUI {
         scrollCountDisplay.style.fontFamily = "'SF Pro Rounded', sans-serif";
         scrollCountDisplay.style.textShadow = '0 2px 4px rgba(0,0,0,0.5)';
         this.updateScrollCountDisplay(scrollCountDisplay);
-        content.appendChild(scrollCountDisplay);
+        this.scrollContent.appendChild(scrollCountDisplay);
 
         // Button Container
         const btnContainer = document.createElement('div');
@@ -110,11 +213,192 @@ export class SummonUI {
         };
 
         btnContainer.appendChild(this.summonBtnX10);
+        this.scrollContent.appendChild(btnContainer);
+    }
 
-        content.appendChild(btnContainer);
+    private initializeOrbContent() {
+        // Will be populated by refreshOrbContent
+    }
 
-        // Result Overlay (Hidden initially)
-        this.createResultOverlay(content);
+    private refreshOrbContent() {
+        this.orbContent.innerHTML = '';
+
+        const session = localStorage.getItem('awengers_session');
+        if (session) {
+            this.user = JSON.parse(session);
+        }
+
+        const userAny = this.user as any;
+        const orbs = [
+            { id: 'AGI', name: 'Agility Orb', count: userAny?.agiOrb || 0, color: '#22d3ee', icon: '/assets/home/scroll/hero-orb/agi.png' },
+            { id: 'STR', name: 'Strength Orb', count: userAny?.strOrb || 0, color: '#ef4444', icon: '/assets/home/scroll/hero-orb/str.png' },
+            { id: 'INT', name: 'Intelligence Orb', count: userAny?.intOrb || 0, color: '#8b5cf6', icon: '/assets/home/scroll/hero-orb/int.png' }
+        ];
+
+        // Title
+        const title = document.createElement('div');
+        title.innerHTML = '🔮 Orb Summon';
+        title.style.cssText = `
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ffd700;
+            font-family: 'SF Pro Rounded', sans-serif;
+            margin-bottom: 10px;
+        `;
+        this.orbContent.appendChild(title);
+
+        const desc = document.createElement('div');
+        desc.innerHTML = 'Spend 100 orbs to summon a hero of that attribute type.';
+        desc.style.cssText = `
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+        `;
+        this.orbContent.appendChild(desc);
+
+        // Orb Cards Grid
+        const orbGrid = document.createElement('div');
+        orbGrid.style.cssText = `
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        `;
+
+        orbs.forEach(orb => {
+            const card = document.createElement('div');
+            card.style.cssText = `
+                background: linear-gradient(135deg, rgba(0,0,0,0.4), rgba(0,0,0,0.2));
+                border: 3px solid ${orb.color}40;
+                border-radius: 20px;
+                padding: 30px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+                transition: all 0.3s;
+                width: 180px;
+            `;
+            card.onmouseenter = () => {
+                card.style.borderColor = orb.color;
+                card.style.transform = 'translateY(-5px)';
+                card.style.boxShadow = `0 10px 30px ${orb.color}40`;
+            };
+            card.onmouseleave = () => {
+                card.style.borderColor = `${orb.color}40`;
+                card.style.transform = 'translateY(0)';
+                card.style.boxShadow = 'none';
+            };
+
+            // Icon
+            const icon = document.createElement('img');
+            icon.src = orb.icon;
+            icon.style.cssText = `
+                width: 80px;
+                height: 80px;
+                object-fit: contain;
+                filter: drop-shadow(0 0 20px ${orb.color}60);
+            `;
+            card.appendChild(icon);
+
+            // Name
+            const name = document.createElement('div');
+            name.innerText = orb.name;
+            name.style.cssText = `
+                font-size: 1rem;
+                font-weight: bold;
+                color: ${orb.color};
+                font-family: 'SF Pro Rounded', sans-serif;
+            `;
+            card.appendChild(name);
+
+            // Count
+            const count = document.createElement('div');
+            count.innerHTML = `<span style="font-size: 2rem; font-weight: bold; color: #fff;">${orb.count}</span><span style="color: #9ca3af;"> / 100</span>`;
+            card.appendChild(count);
+
+            // Progress bar
+            const progressBg = document.createElement('div');
+            progressBg.style.cssText = `
+                width: 100%;
+                height: 6px;
+                background: rgba(255,255,255,0.1);
+                border-radius: 3px;
+                overflow: hidden;
+            `;
+            const progressFill = document.createElement('div');
+            const progress = Math.min(100, (orb.count / 100) * 100);
+            progressFill.style.cssText = `
+                width: ${progress}%;
+                height: 100%;
+                background: ${orb.color};
+                border-radius: 3px;
+            `;
+            progressBg.appendChild(progressFill);
+            card.appendChild(progressBg);
+
+            // Summon Button
+            const summonBtn = document.createElement('button');
+            const canSummon = orb.count >= 100;
+            summonBtn.innerText = canSummon ? '✨ SUMMON' : 'Need 100 Orbs';
+            summonBtn.style.cssText = `
+                margin-top: 10px;
+                padding: 12px 25px;
+                background: ${canSummon ? `linear-gradient(135deg, ${orb.color}, ${orb.color}aa)` : 'rgba(100,100,100,0.3)'};
+                border: none;
+                border-radius: 25px;
+                color: ${canSummon ? 'white' : '#666'};
+                font-weight: bold;
+                font-size: 0.9rem;
+                cursor: ${canSummon ? 'pointer' : 'not-allowed'};
+                transition: transform 0.2s;
+            `;
+            if (canSummon) {
+                summonBtn.onmouseenter = () => { summonBtn.style.transform = 'scale(1.05)'; };
+                summonBtn.onmouseleave = () => { summonBtn.style.transform = 'scale(1)'; };
+                summonBtn.onclick = () => this.performOrbSummon(orb.id);
+            }
+            card.appendChild(summonBtn);
+
+            orbGrid.appendChild(card);
+        });
+
+        this.orbContent.appendChild(orbGrid);
+    }
+
+    private async performOrbSummon(orbType: string) {
+        if (this.isAnimating) return;
+        this.isAnimating = true;
+
+        try {
+            const res = await fetch('http://localhost:3000/api/altar/orb-summon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commanderName: this.user?.commanderName,
+                    orbType: orbType
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                this.user = data.user;
+                localStorage.setItem('awengers_session', JSON.stringify(this.user));
+                if (this.user && this.onUpdate) {
+                    this.onUpdate(this.user);
+                }
+
+                // Show the summoned hero
+                this.revealHero(data.hero);
+                this.refreshOrbContent();
+            } else {
+                alert(data.message || 'Summon failed');
+                this.isAnimating = false;
+            }
+        } catch (error) {
+            console.error('Orb summon error:', error);
+            alert('Network error');
+            this.isAnimating = false;
+        }
     }
 
     private applyButtonStyle(btn: HTMLElement, isDisabled: boolean) {

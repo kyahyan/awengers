@@ -186,6 +186,11 @@ export interface UserProfile {
     heroPotion: number;
     soulPotion: number;
 
+    // Hero Orbs for attribute-specific summons (from decomposing heroes)
+    agiOrb?: number;
+    strOrb?: number;
+    intOrb?: number;
+
     // Progression
     achievementsProgress: Record<string, number>; // ID -> Value (e.g., gold collected)
     achievementsClaimed: string[]; // IDs of claimed rewards

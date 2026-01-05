@@ -82,6 +82,28 @@ export const ITEMS: Record<string, ItemDef> = {
         description: "Fine powder used to enhance equipment.",
         type: "material"
     },
+    // Hero Orbs - from decomposing heroes
+    "agi_orb": {
+        id: "agi_orb",
+        name: "Agility Orb",
+        icon: "/assets/home/scroll/hero-orb/agi.png",
+        description: "A magical orb containing the essence of agility heroes. Collect 100 to summon an AGI hero.",
+        type: "material"
+    },
+    "str_orb": {
+        id: "str_orb",
+        name: "Strength Orb",
+        icon: "/assets/home/scroll/hero-orb/str.png",
+        description: "A magical orb containing the essence of strength heroes. Collect 100 to summon a STR hero.",
+        type: "material"
+    },
+    "int_orb": {
+        id: "int_orb",
+        name: "Intelligence Orb",
+        icon: "/assets/home/scroll/hero-orb/int.png",
+        description: "A magical orb containing the essence of intelligence heroes. Collect 100 to summon an INT hero.",
+        type: "material"
+    },
     // Equipment - Convert from new system
     ...Object.fromEntries(
         Object.entries(ALL_ITEMS).map(([key, item]) => [key, toLegacyFormat(item)])

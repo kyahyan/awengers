@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema({
     heroPotion: { type: Number, default: 1000 },
     soulPotion: { type: Number, default: 1000 },
 
+    // Hero Orbs for attribute-specific summons (from decomposing heroes)
+    agiOrb: { type: Number, default: 0 },
+    strOrb: { type: Number, default: 0 },
+    intOrb: { type: Number, default: 0 },
+
     // Use Map for Record<string, number>
     achievementsProgress: { type: Map, of: Number, default: {} },
     achievementsClaimed: [{ type: String }],

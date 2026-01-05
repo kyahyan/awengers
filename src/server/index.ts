@@ -1144,6 +1144,401 @@ app.post('/api/team/deploy', async (req, res) => {
     }
 });
 
+// ==================== HERO ALTAR ENDPOINTS ====================
+
+// DECOMPOSE HERO - Permanently sacrifice hero for resources
+app.post('/api/altar/decompose', async (req, res) => {
+    try {
+        const { commanderName, instanceId } = req.body;
+        if (!commanderName || !instanceId) {
+            return res.status(400).json({ message: 'Missing commanderName or instanceId' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+            return res.status(404).json({ message: 'Hero not found' });
+        }
+
+        // Check if hero is in deployed team
+        if (userAny.deployedTeam && userAny.deployedTeam.includes(instanceId)) {
+            return res.status(400).json({ message: 'Cannot decompose a deployed hero. Remove from team first.' });
+        }
+
+        const hero = userAny.heroes.get(instanceId);
+        const heroStars = hero.stars || 1;
+        const heroAttribute = hero.attribute || 'STR';
+        const heroLevel = hero.level || 1;
+
+        // Calculate rewards
+        const soulPotionReward = 50 + (heroLevel * 5); // Base 50 + 5 per level
+        const heroPotionReward = 25 + (heroLevel * 2); // Base 25 + 2 per level
+        const orbReward = 10 * heroStars; // 10 orbs per star
+
+        // Return equipped items to inventory
+        if (hero.equipment && Array.isArray(hero.equipment)) {
+            const equipmentInventory = userAny.equipmentInventory || [];
+
+            for (const itemId of hero.equipment) {
+                if (!itemId) continue;
+
+                const existingItemIndex = equipmentInventory.findIndex((eq: any) => eq.itemId === itemId && eq.heroId === instanceId);
+                if (existingItemIndex !== -1) {
+                    equipmentInventory[existingItemIndex].equipped = false;
+                    equipmentInventory[existingItemIndex].heroId = undefined;
+                    console.log(`[Altar] Returned ${itemId} to inventory from decomposed hero ${instanceId}`);
+                }
+            }
+            userAny.equipmentInventory = equipmentInventory;
+            user.markModified('equipmentInventory');
+        }
+
+        // Award resources
+        user.soulPotion = (user.soulPotion || 0) + soulPotionReward;
+        user.heroPotion = (user.heroPotion || 0) + heroPotionReward;
+
+        // Award orbs based on attribute
+        if (heroAttribute === 'AGI') {
+            userAny.agiOrb = (userAny.agiOrb || 0) + orbReward;
+        } else if (heroAttribute === 'STR') {
+            userAny.strOrb = (userAny.strOrb || 0) + orbReward;
+        } else if (heroAttribute === 'INT') {
+            userAny.intOrb = (userAny.intOrb || 0) + orbReward;
+        }
+
+        // Delete hero
+        userAny.heroes.delete(instanceId);
+        user.markModified('heroes');
+
+        await user.save();
+
+        console.log(`[Altar] ${commanderName} decomposed ${instanceId} (${heroStars}★ ${heroAttribute}) - Got ${soulPotionReward} SP, ${heroPotionReward} HP, ${orbReward} ${heroAttribute} Orbs`);
+
+        res.json({
+            success: true,
+            rewards: {
+                soulPotion: soulPotionReward,
+                heroPotion: heroPotionReward,
+                orbs: orbReward,
+                orbType: heroAttribute
+            },
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Decompose Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// DECOMPOSE HEROES BULK - Permanently sacrifice multiple heroes for resources
+app.post('/api/altar/decompose-bulk', async (req, res) => {
+    try {
+        const { commanderName, instanceIds } = req.body;
+        if (!commanderName || !instanceIds || !Array.isArray(instanceIds)) {
+            return res.status(400).json({ message: 'Missing commanderName or instanceIds[]' });
+        }
+
+        if (instanceIds.length === 0) {
+            return res.status(400).json({ message: 'No heroes selected' });
+        }
+
+        if (instanceIds.length > 14) {
+            return res.status(400).json({ message: 'Maximum 14 heroes can be decomposed at once' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        const deployedTeam = userAny.deployedTeam || [];
+
+        // Track total rewards
+        let totalSoulPotion = 0;
+        let totalHeroPotion = 0;
+        const orbTotals: Record<string, number> = { AGI: 0, STR: 0, INT: 0 };
+        let decomposedCount = 0;
+
+        for (const instanceId of instanceIds) {
+            if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+                continue; // Skip missing heroes
+            }
+
+            // Check if hero is deployed
+            if (deployedTeam.includes(instanceId)) {
+                continue; // Skip deployed heroes
+            }
+
+            const hero = userAny.heroes.get(instanceId);
+            const heroStars = hero.stars || 1;
+            const heroAttribute = hero.attribute || 'STR';
+            const heroLevel = hero.level || 1;
+
+            // Calculate rewards
+            const soulPotionReward = 50 + (heroLevel * 5);
+            const heroPotionReward = 25 + (heroLevel * 2);
+            const orbReward = 10 * heroStars;
+
+            totalSoulPotion += soulPotionReward;
+            totalHeroPotion += heroPotionReward;
+            orbTotals[heroAttribute] += orbReward;
+
+            // Return equipped items to inventory
+            if (hero.equipment && Array.isArray(hero.equipment)) {
+                const equipmentInventory = userAny.equipmentInventory || [];
+                for (const itemId of hero.equipment) {
+                    if (!itemId) continue;
+                    const existingItemIndex = equipmentInventory.findIndex((eq: any) => eq.itemId === itemId && eq.heroId === instanceId);
+                    if (existingItemIndex !== -1) {
+                        equipmentInventory[existingItemIndex].equipped = false;
+                        equipmentInventory[existingItemIndex].heroId = undefined;
+                    }
+                }
+                userAny.equipmentInventory = equipmentInventory;
+            }
+
+            // Delete hero
+            userAny.heroes.delete(instanceId);
+            decomposedCount++;
+        }
+
+        if (decomposedCount === 0) {
+            return res.status(400).json({ message: 'No valid heroes to decompose' });
+        }
+
+        // Award resources
+        user.soulPotion = (user.soulPotion || 0) + totalSoulPotion;
+        user.heroPotion = (user.heroPotion || 0) + totalHeroPotion;
+        userAny.agiOrb = (userAny.agiOrb || 0) + orbTotals.AGI;
+        userAny.strOrb = (userAny.strOrb || 0) + orbTotals.STR;
+        userAny.intOrb = (userAny.intOrb || 0) + orbTotals.INT;
+
+        user.markModified('heroes');
+        user.markModified('equipmentInventory');
+        await user.save();
+
+        console.log(`[Altar] ${commanderName} bulk decomposed ${decomposedCount} heroes - Got ${totalSoulPotion} SP, ${totalHeroPotion} HP, AGI:${orbTotals.AGI} STR:${orbTotals.STR} INT:${orbTotals.INT}`);
+
+        res.json({
+            success: true,
+            count: decomposedCount,
+            totalRewards: {
+                soulPotion: totalSoulPotion,
+                heroPotion: totalHeroPotion,
+                agiOrb: orbTotals.AGI,
+                strOrb: orbTotals.STR,
+                intOrb: orbTotals.INT
+            },
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Bulk Decompose Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// RESET HERO - Reset hero level to 1, returns materials spent on leveling
+app.post('/api/altar/reset', async (req, res) => {
+    try {
+        const { commanderName, instanceId } = req.body;
+        if (!commanderName || !instanceId) {
+            return res.status(400).json({ message: 'Missing commanderName or instanceId' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+            return res.status(404).json({ message: 'Hero not found' });
+        }
+
+        const hero = userAny.heroes.get(instanceId);
+        const currentLevel = hero.level || 1;
+
+        if (currentLevel <= 1) {
+            return res.status(400).json({ message: 'Hero is already level 1' });
+        }
+
+        // Calculate materials to return (approximately 80% of what was spent)
+        // Formula: Each level costs ~100 * level gold and ~50 * level soul potion
+        let totalGoldSpent = 0;
+        let totalSoulPotionSpent = 0;
+        for (let lvl = 1; lvl < currentLevel; lvl++) {
+            totalGoldSpent += 100 * lvl;
+            totalSoulPotionSpent += 50;
+        }
+
+        const goldReturn = Math.floor(totalGoldSpent * 0.8);
+        const soulPotionReturn = Math.floor(totalSoulPotionSpent * 0.8);
+
+        // Reset hero level
+        hero.level = 1;
+        hero.experience = 0;
+        hero.currentRankIndex = 0;
+
+        userAny.heroes.set(instanceId, hero);
+        user.markModified('heroes');
+
+        // Return resources
+        user.gold = (user.gold || 0) + goldReturn;
+        user.soulPotion = (user.soulPotion || 0) + soulPotionReturn;
+
+        await user.save();
+
+        console.log(`[Altar] ${commanderName} reset ${instanceId} from level ${currentLevel} to 1 - Returned ${goldReturn} Gold, ${soulPotionReturn} SP`);
+
+        res.json({
+            success: true,
+            previousLevel: currentLevel,
+            returned: {
+                gold: goldReturn,
+                soulPotion: soulPotionReturn
+            },
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Reset Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// STAR-BACK - Reset hero stars to 1, returns merge materials (NOT sacrificed heroes)
+app.post('/api/altar/star-back', async (req, res) => {
+    try {
+        const { commanderName, instanceId } = req.body;
+        if (!commanderName || !instanceId) {
+            return res.status(400).json({ message: 'Missing commanderName or instanceId' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+        if (!userAny.heroes || !userAny.heroes.has(instanceId)) {
+            return res.status(404).json({ message: 'Hero not found' });
+        }
+
+        const hero = userAny.heroes.get(instanceId);
+        const currentStars = hero.stars || 1;
+
+        if (currentStars <= 1) {
+            return res.status(400).json({ message: 'Hero is already 1★' });
+        }
+
+        // Calculate materials to return based on stars lost
+        // Estimated cost per star upgrade: 1000 gold each
+        const goldReturn = (currentStars - 1) * 1000;
+        const heroPotionReturn = (currentStars - 1) * 50; // 50 hero potion per star
+
+        // Reset hero stars
+        hero.stars = 1;
+        userAny.heroes.set(instanceId, hero);
+        user.markModified('heroes');
+
+        // Return resources
+        user.gold = (user.gold || 0) + goldReturn;
+        user.heroPotion = (user.heroPotion || 0) + heroPotionReturn;
+
+        await user.save();
+
+        console.log(`[Altar] ${commanderName} star-backed ${instanceId} from ${currentStars}★ to 1★ - Returned ${goldReturn} Gold, ${heroPotionReturn} HP`);
+
+        res.json({
+            success: true,
+            previousStars: currentStars,
+            returned: {
+                gold: goldReturn,
+                heroPotion: heroPotionReturn
+            },
+            note: 'Sacrificed heroes are NOT returned, only materials.',
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Star-Back Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
+// ORB SUMMON - Summon a hero using 100 orbs of specific type
+app.post('/api/altar/orb-summon', async (req, res) => {
+    try {
+        const { commanderName, orbType } = req.body;
+        if (!commanderName || !orbType) {
+            return res.status(400).json({ message: 'Missing commanderName or orbType' });
+        }
+
+        if (!['AGI', 'STR', 'INT'].includes(orbType)) {
+            return res.status(400).json({ message: 'Invalid orbType. Must be AGI, STR, or INT' });
+        }
+
+        const user = await User.findOne({ commanderName });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const userAny = user as any;
+
+        // Check orb count
+        const orbField = orbType.toLowerCase() + 'Orb' as 'agiOrb' | 'strOrb' | 'intOrb';
+        const currentOrbs = userAny[orbField] || 0;
+
+        if (currentOrbs < 100) {
+            return res.status(400).json({ message: `Not enough ${orbType} Orbs. Need 100, have ${currentOrbs}` });
+        }
+
+        // Deduct orbs
+        userAny[orbField] = currentOrbs - 100;
+
+        // Pick a random hero of that attribute
+        const heroesOfType = ALL_HEROES.filter(h => h.attribute === orbType);
+        if (heroesOfType.length === 0) {
+            return res.status(500).json({ message: `No heroes found for ${orbType} attribute` });
+        }
+
+        const hero = heroesOfType[Math.floor(Math.random() * heroesOfType.length)];
+
+        // Create new hero instance
+        if (!userAny.heroes) userAny.heroes = new Map();
+        const instanceId = `${hero.codeName.toLowerCase()}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+        const manager = getHeroManager(hero.codeName, null);
+        const newInstance = manager.getHeroInstance();
+        (newInstance as any).heroCodeName = hero.codeName;
+        (newInstance as any).stars = 1;
+        (newInstance as any).attribute = orbType;
+
+        userAny.heroes.set(instanceId, newInstance);
+
+        // Update heroUsage stats
+        if (!userAny.stats) userAny.stats = {};
+        if (!userAny.stats.heroUsage) userAny.stats.heroUsage = new Map();
+        const usageMap = userAny.stats.heroUsage;
+        usageMap.set(hero.codeName, (usageMap.get(hero.codeName) || 0) + 1);
+
+        user.markModified('heroes');
+        user.markModified('stats.heroUsage');
+        await user.save();
+
+        console.log(`[Altar] ${commanderName} summoned ${hero.codeName} (${orbType}) using 100 orbs`);
+
+        res.json({
+            success: true,
+            hero,
+            instanceId,
+            remainingOrbs: currentOrbs - 100,
+            user: sanitizeUser(user)
+        });
+
+    } catch (error) {
+        console.error("Orb Summon Error:", error);
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

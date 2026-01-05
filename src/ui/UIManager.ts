@@ -10,6 +10,7 @@ import { BackpackUI } from './BackpackUI';
 import { ForgeUI } from './ForgeUI';
 import { HeroDetailUI } from './HeroDetailUI';
 import { GalleryHeroModal } from './GalleryHeroModal';
+import { HeroAltarUI } from './HeroAltarUI';
 import { UserProfile, addPlayerXp } from '../data/UserProfile';
 import { HERO_ASSETS } from '../data/HeroAssetsMap';
 import { AdventureModal } from './AdventureModal';
@@ -1671,6 +1672,12 @@ export class UIManager {
                                     // Update local user profile with new deployedTeam
                                     if (this.currentUser) {
                                         (this.currentUser as any).deployedTeam = teamInstanceIds;
+                                        // Persist to localStorage so changes reflect immediately
+                                        localStorage.setItem('awengers_session', JSON.stringify(this.currentUser));
+                                        // Update header if needed
+                                        if (this.headerUI) {
+                                            this.headerUI.update(this.currentUser);
+                                        }
                                     }
                                     deployBtn.innerText = '✅ TEAM SAVED!';
                                     deployBtn.style.background = 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)';
@@ -2163,13 +2170,25 @@ export class UIManager {
                     deployContent.appendChild(selectSection);
 
                     contentArea.appendChild(deployContent);
+                } else if (tabName === 'Altar') {
+                    // Altar Tab: Renders altar UI directly in content area
+                    const altarUI = new HeroAltarUI(
+                        this.currentUser!,
+                        (updatedUser) => {
+                            this.currentUser = updatedUser;
+                            if (this.headerUI) this.headerUI.update(this.currentUser);
+                            localStorage.setItem('awengers_session', JSON.stringify(this.currentUser));
+                        }
+                    );
+
+                    contentArea.appendChild(altarUI.getElement());
                 }
             };
 
             // Function to update tab styles
             const updateTabStyles = () => {
                 tabElements.forEach((tab, index) => {
-                    const tabName = ['Heroes', 'Gallery', 'Deployment'][index];
+                    const tabName = ['Heroes', 'Gallery', 'Deployment', 'Altar'][index];
                     if (tabName === activeTab) {
                         tab.style.background = 'linear-gradient(180deg, #a07850 0%, #6b4830 100%)';
                         tab.style.color = '#fff';
@@ -2198,7 +2217,7 @@ export class UIManager {
                 pointer-events: auto;
             `;
 
-            const tabs = ['Heroes', 'Gallery', 'Deployment'];
+            const tabs = ['Heroes', 'Gallery', 'Deployment', 'Altar'];
             tabs.forEach(tabName => {
                 const tab = document.createElement('div');
                 tab.innerText = tabName;
